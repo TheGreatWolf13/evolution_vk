@@ -1,6 +1,22 @@
 [package]
 name = "evolution_vk"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2024"
+authors = ["TheGreatWolf"]
 
 [dependencies]
+vulkano = "0.34.2"
+winit = "0.28.7"
+default = "0.1.2"
+log = "0.4.29"
+env_logger = "0.11.10"
+vulkano-shaders = "0.34.0"
+image = "0.24.9"
+paste = "1.0.15"
+glam = "0.32.1"
+png = "0.18.1"
+rand = "0.10.1"
+bytemuck = "1.25.0"
+
+[profile.dev]
+opt-level = 1
