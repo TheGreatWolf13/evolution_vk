@@ -6,7 +6,7 @@ authors = ["TheGreatWolf"]
 
 [dependencies]
 vulkano = "0.34.2"
-winit = "0.28.7"
+winit = { version = "0.30.13", features = ["rwh_05"] }
 default = "0.1.2"
 log = "0.4.29"
 env_logger = "0.11.10"
