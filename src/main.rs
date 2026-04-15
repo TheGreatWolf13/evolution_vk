@@ -5,7 +5,6 @@ use log::{error, info};
 use smallvec::smallvec;
 use std::sync::Arc;
 use std::time::Instant;
-use vulkano::buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo};
 use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents};
@@ -30,7 +29,7 @@ use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 use vulkano::pipeline::{GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass};
 use vulkano::shader::{EntryPoint, ShaderModule};
-use vulkano::swapchain::{PresentMode, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo};
+use vulkano::swapchain::{PresentMode, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::sync::GpuFuture;
 use vulkano::{swapchain, sync, Validated, VulkanError, VulkanLibrary};
 use winit::application::ApplicationHandler;
@@ -55,26 +54,54 @@ enum Game {
 }
 
 struct GameData {
+    window: Arc<Window>,
     device: Arc<Device>,
     queue: Arc<Queue>,
-    window: Arc<Window>,
-    swapchain: Arc<Swapchain>,
-    pipeline: Arc<GraphicsPipeline>,
-    framebuffers: Vec<Arc<Framebuffer>>,
-    render_pass: Arc<RenderPass>,
     memory_allocator: Arc<StandardMemoryAllocator>,
+    command_buffer_allocator: StandardCommandBufferAllocator,
+    pipeline: Arc<GraphicsPipeline>,
+    render_pass: Arc<RenderPass>,
+    vertex_buffer: Subbuffer<[MyVertex]>,
     vs: Arc<ShaderModule>,
     fs: Arc<ShaderModule>,
-    vertex_buffer: Subbuffer<[MyVertex]>,
-    command_buffer_allocator: StandardCommandBufferAllocator,
-    uniform_buffer_allocator: SubbufferAllocator,
-    descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
+    swap_mechanism: SwapMechanism,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
     window_resized: bool,
     recreate_swapchain: bool,
     last_frame: Instant,
     frames: u32,
     time: f32,
+}
+
+struct SwapMechanism {
+    swapchain: Arc<Swapchain>,
+    framebuffers: Vec<Arc<Framebuffer>>,
+    uniform_buffer_sets: Vec<Arc<PersistentDescriptorSet>>,
+    uniform_buffers: Vec<Subbuffer<vs::Data>>,
+}
+
+impl SwapMechanism {
+    fn swap_buffers<F: FnMut()>(&mut self, mut if_suboptimal: F, mut after_swap: impl FnMut(SwapchainAcquireFuture, Arc<Framebuffer>, &Subbuffer<vs::Data>, Arc<PersistentDescriptorSet>, SwapchainPresentInfo, F)) {
+        let (image_index, suboptimal, acquire_future) = match swapchain::acquire_next_image(self.swapchain.clone(), None).map_err(Validated::unwrap) {
+            Ok(r) => r,
+            Err(VulkanError::OutOfDate) => {
+                if_suboptimal();
+                return;
+            }
+            Err(e) => panic!("failed to acquire next image: {e}"),
+        };
+        if suboptimal {
+            if_suboptimal();
+        }
+        after_swap(
+            acquire_future,
+            self.framebuffers[image_index as usize].clone(),
+            &self.uniform_buffers[image_index as usize],
+            self.uniform_buffer_sets[image_index as usize].clone(),
+            SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index),
+            if_suboptimal,
+        );
+    }
 }
 
 impl ApplicationHandler for Game {
@@ -132,7 +159,6 @@ impl ApplicationHandler for Game {
                 };
                 let render_pass = get_render_pass(device.clone(), swapchain.clone());
                 let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-                let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(device.clone(), StandardDescriptorSetAllocatorCreateInfo::default()));
                 let vertex1 = MyVertex {
                     position: [-0.5, -0.5, 0.0],
                 };
@@ -157,30 +183,42 @@ impl ApplicationHandler for Game {
                 let vs = vs::load(device.clone()).expect("failed to create shader module");
                 let fs = fs::load(device.clone()).expect("failed to create shader module");
                 let (framebuffers, pipeline) = get_framebuffers_and_pipeline(window.inner_size(), &images, render_pass.clone(), memory_allocator.clone(), vs.entry_point("main").unwrap(), fs.entry_point("main").unwrap());
-                let command_buffer_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
-                let uniform_buffer_allocator = SubbufferAllocator::new(
-                    memory_allocator.clone(),
-                    SubbufferAllocatorCreateInfo {
-                        buffer_usage: BufferUsage::UNIFORM_BUFFER,
+                let uniform_buffers = (0..swapchain.image_count()).map(|_| {
+                    Buffer::new_sized::<vs::Data>(memory_allocator.clone(), BufferCreateInfo {
+                        usage: BufferUsage::UNIFORM_BUFFER,
+                        ..Default::default()
+                    }, AllocationCreateInfo {
                         memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                         ..Default::default()
-                    },
-                );
+                    }).unwrap()
+                }).collect::<Vec<_>>();
+                let command_buffer_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
+                let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(device.clone(), StandardDescriptorSetAllocatorCreateInfo::default()));
+                let uniform_buffer_sets = uniform_buffers.iter().map(|buffer| {
+                    PersistentDescriptorSet::new(
+                        &descriptor_set_allocator,
+                        pipeline.layout().set_layouts()[0].clone(),
+                        [WriteDescriptorSet::buffer(0, buffer.clone())],
+                        [],
+                    ).unwrap()
+                }).collect::<Vec<_>>();
                 *self = Game::Init(GameData {
                     device: device.clone(),
                     queue,
                     window,
-                    swapchain,
                     pipeline,
-                    framebuffers,
                     render_pass,
                     memory_allocator,
                     vs,
                     fs,
                     vertex_buffer,
                     command_buffer_allocator,
-                    uniform_buffer_allocator,
-                    descriptor_set_allocator,
+                    swap_mechanism: SwapMechanism {
+                        swapchain,
+                        framebuffers,
+                        uniform_buffers,
+                        uniform_buffer_sets,
+                    },
                     previous_frame_end: Some(Box::new(sync::now(device)) as Box<dyn GpuFuture>),
                     window_resized: false,
                     recreate_swapchain: false,
@@ -213,10 +251,7 @@ impl ApplicationHandler for Game {
             WindowEvent::Moved(_) => {}
             WindowEvent::CloseRequested => {
                 info!("Close requested");
-                *self = Game::Uninit;
-                info!("Game is uninit");
                 event_loop.exit();
-                info!("Exit event loop");
             }
             WindowEvent::Destroyed => {}
             WindowEvent::DroppedFile(_) => {}
@@ -238,7 +273,7 @@ impl ApplicationHandler for Game {
                     game.frames += 1;
                     game.time += delta.as_secs_f32();
                     if game.time >= 1.0 {
-                        info!("FPS: {}", game.frames);
+                        info!("FPS: {} / {:.1}%", game.frames, 100.0 * 120.0 / game.frames as f32);
                         game.frames = 0;
                         game.time = 0.0;
                     }
@@ -247,93 +282,71 @@ impl ApplicationHandler for Game {
                         game.window_resized = false;
                         game.recreate_swapchain = false;
                         let new_dimensions = game.window.inner_size();
-                        let (new_swapchain, new_images) = game.swapchain.recreate(SwapchainCreateInfo {
+                        let (new_swapchain, new_images) = game.swap_mechanism.swapchain.recreate(SwapchainCreateInfo {
                             image_extent: new_dimensions.into(),
-                            ..game.swapchain.create_info()
+                            ..game.swap_mechanism.swapchain.create_info()
                         }).expect("failed to recreate swapchain");
-                        game.swapchain = new_swapchain;
+                        game.swap_mechanism.swapchain = new_swapchain;
                         let (new_framebuffers, new_pipeline) = get_framebuffers_and_pipeline(new_dimensions, &new_images, game.render_pass.clone(), game.memory_allocator.clone(), game.vs.entry_point("main").unwrap(), game.fs.entry_point("main").unwrap());
                         game.pipeline = new_pipeline;
-                        game.framebuffers = new_framebuffers;
+                        game.swap_mechanism.framebuffers = new_framebuffers;
                     }
-                    let uniform_buffer_subbuffer = {
-                        let uniform_data = vs::Data {
+                    game.swap_mechanism.swap_buffers(|| game.recreate_swapchain = true, |acquire_future, framebuffer, uniform_buffer, descriptor_set, present_info, mut if_suboptimal| {
+                        let mut builder = AutoCommandBufferBuilder::primary(&game.command_buffer_allocator, game.queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
+                        builder
+                            .begin_render_pass(
+                                RenderPassBeginInfo {
+                                    clear_values: vec![
+                                        Some([0.0, 0.0, 1.0, 1.0].into()),
+                                        Some(1.0.into()),
+                                    ],
+                                    ..RenderPassBeginInfo::framebuffer(framebuffer)
+                                },
+                                SubpassBeginInfo {
+                                    contents: SubpassContents::Inline,
+                                    ..Default::default()
+                                },
+                            ).unwrap()
+                            .bind_pipeline_graphics(game.pipeline.clone())
+                            .unwrap()
+                            .bind_descriptor_sets(PipelineBindPoint::Graphics, game.pipeline.layout().clone(), 0, descriptor_set)
+                            .unwrap()
+                            .bind_vertex_buffers(0, game.vertex_buffer.clone())
+                            .unwrap()
+                            .draw(game.vertex_buffer.len() as u32, 1, 0, 0)
+                            .unwrap()
+                            .end_render_pass(Default::default())
+                            .unwrap();
+                        let command_buffer = builder.build().unwrap();
+                        acquire_future.wait(None).unwrap();
+                        game.previous_frame_end.as_mut().unwrap().cleanup_finished();
+                        *uniform_buffer.write().unwrap() = vs::Data {
                             world: Mat4::IDENTITY.into(),
                             view: Mat4::look_to_rh((0.0, 0.0, 0.0), (0.0, 0.0, -1.0), Vec3::Y).into(),
                             proj: Mat4::perspective(AngleDeg::new(50.0), game.window.inner_size().width as f32 / game.window.inner_size().height as f32, 0.01, 100.0).into(),
                         };
-                        let subbuffer = game.uniform_buffer_allocator.allocate_sized().unwrap();
-                        *subbuffer.write().unwrap() = uniform_data;
-                        subbuffer
-                    };
-                    let layout = &game.pipeline.layout().set_layouts()[0];
-                    let set = PersistentDescriptorSet::new(
-                        &game.descriptor_set_allocator,
-                        layout.clone(),
-                        [WriteDescriptorSet::buffer(0, uniform_buffer_subbuffer)],
-                        [],
-                    ).unwrap();
-                    let (image_index, suboptimal, acquire_future) = match swapchain::acquire_next_image(game.swapchain.clone(), None).map_err(Validated::unwrap) {
-                        Ok(r) => r,
-                        Err(VulkanError::OutOfDate) => {
-                            game.recreate_swapchain = true;
-                            return;
+                        let future = game.previous_frame_end
+                                         .take()
+                                         .unwrap()
+                                         .join(acquire_future)
+                                         .then_execute(game.queue.clone(), command_buffer)
+                                         .unwrap()
+                                         .then_swapchain_present(game.queue.clone(), present_info)
+                                         .then_signal_fence_and_flush();
+                        match future.map_err(Validated::unwrap) {
+                            Ok(future) => {
+                                game.previous_frame_end = Some(future.boxed());
+                            }
+                            Err(VulkanError::OutOfDate) => {
+                                if_suboptimal();
+                                game.previous_frame_end = Some(sync::now(game.device.clone()).boxed());
+                            }
+                            Err(e) => {
+                                error!("failed to flush future: {e}");
+                                game.previous_frame_end = Some(sync::now(game.device.clone()).boxed());
+                            }
                         }
-                        Err(e) => panic!("failed to acquire next image: {e}"),
-                    };
-                    if suboptimal {
-                        game.recreate_swapchain = true;
-                    }
-                    let mut builder = AutoCommandBufferBuilder::primary(&game.command_buffer_allocator, game.queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
-                    builder
-                        .begin_render_pass(
-                            RenderPassBeginInfo {
-                                clear_values: vec![
-                                    Some([0.0, 0.0, 1.0, 1.0].into()),
-                                    Some(1.0.into()),
-                                ],
-                                ..RenderPassBeginInfo::framebuffer(game.framebuffers[image_index as usize].clone())
-                            },
-                            SubpassBeginInfo {
-                                contents: SubpassContents::Inline,
-                                ..Default::default()
-                            },
-                        ).unwrap()
-                        .bind_pipeline_graphics(game.pipeline.clone())
-                        .unwrap()
-                        .bind_descriptor_sets(PipelineBindPoint::Graphics, game.pipeline.layout().clone(), 0, set)
-                        .unwrap()
-                        .bind_vertex_buffers(0, game.vertex_buffer.clone())
-                        .unwrap()
-                        .draw(game.vertex_buffer.len() as u32, 1, 0, 0)
-                        .unwrap()
-                        .end_render_pass(Default::default())
-                        .unwrap();
-                    let command_buffer = builder.build().unwrap();
-                    let future = game.previous_frame_end
-                                     .take()
-                                     .unwrap()
-                                     .join(acquire_future)
-                                     .then_execute(game.queue.clone(), command_buffer)
-                                     .unwrap()
-                                     .then_swapchain_present(
-                                         game.queue.clone(),
-                                         SwapchainPresentInfo::swapchain_image_index(game.swapchain.clone(), image_index),
-                                     )
-                                     .then_signal_fence_and_flush();
-                    match future.map_err(Validated::unwrap) {
-                        Ok(future) => {
-                            game.previous_frame_end = Some(future.boxed());
-                        }
-                        Err(VulkanError::OutOfDate) => {
-                            game.recreate_swapchain = true;
-                            game.previous_frame_end = Some(sync::now(game.device.clone()).boxed());
-                        }
-                        Err(e) => {
-                            error!("failed to flush future: {e}");
-                            game.previous_frame_end = Some(sync::now(game.device.clone()).boxed());
-                        }
-                    }
+                    });
                 }
             }
             _ => {}
@@ -502,5 +515,5 @@ fn main() {
     let event_loop = EventLoop::new().unwrap();
     let mut game = Game::Uninit;
     event_loop.run_app(&mut game).unwrap();
-    info!("Make to main");
+    info!("Back to main");
 }
