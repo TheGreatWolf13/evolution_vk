@@ -432,6 +432,7 @@ dependencies = [
  "env_logger",
  "glam",
  "log",
+ "modular-bitfield",
  "paste",
  "smallvec",
  "vulkano",
@@ -764,6 +765,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "714098028fe011992e1c3962653c96b2d578c4b4bce9036e15ff220319b1e0e3"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "modular-bitfield"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2956e537fc68236d2aa048f55704f231cc93f1c4de42fe1ecb5bd7938061fc4a"
+dependencies = [
+ "modular-bitfield-impl",
+ "static_assertions",
+]
+
+[[package]]
+name = "modular-bitfield-impl"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59b43b4fd69e3437618106f7754f34021b831a514f9e1a98ae863cabcd8d8dad"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -1496,6 +1518,12 @@ checksum = "dd538fb6910ac1099850255cf94a94df6551fbdd602454387d0adb2d1ca6dead"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "strict-num"

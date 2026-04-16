@@ -50,10 +50,10 @@ struct MyVertex {
 
 enum Game {
     Uninit,
-    Init(GameData),
+    Init(GraphicsEngine),
 }
 
-struct GameData {
+struct GraphicsEngine {
     window: Arc<Window>,
     device: Arc<Device>,
     queue: Arc<Queue>,
@@ -64,7 +64,7 @@ struct GameData {
     vertex_buffer: Subbuffer<[MyVertex]>,
     vs: Arc<ShaderModule>,
     fs: Arc<ShaderModule>,
-    swap_mechanism: SwapMechanism,
+    swap_mechanism: SwapMechanism<vs::Data>,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
     window_resized: bool,
     recreate_swapchain: bool,
@@ -73,15 +73,30 @@ struct GameData {
     time: f32,
 }
 
-struct SwapMechanism {
+struct SwapMechanism<T> {
     swapchain: Arc<Swapchain>,
     framebuffers: Vec<Arc<Framebuffer>>,
     uniform_buffer_sets: Vec<Arc<PersistentDescriptorSet>>,
-    uniform_buffers: Vec<Subbuffer<vs::Data>>,
+    uniform_buffers: Vec<Subbuffer<T>>,
 }
 
-impl SwapMechanism {
-    fn swap_buffers<F: FnMut()>(&mut self, mut if_suboptimal: F, mut after_swap: impl FnMut(SwapchainAcquireFuture, Arc<Framebuffer>, &Subbuffer<vs::Data>, Arc<PersistentDescriptorSet>, SwapchainPresentInfo, F)) {
+impl GraphicsEngine {
+    fn update_fps(&mut self) {
+        let now = Instant::now();
+        let delta = now - self.last_frame;
+        self.frames += 1;
+        self.time += delta.as_secs_f32();
+        if self.time >= 1.0 {
+            info!("FPS: {} / {:.1}%", self.frames, 100.0 * 120.0 / self.frames as f32);
+            self.frames = 0;
+            self.time = 0.0;
+        }
+        self.last_frame = now;
+    }
+}
+
+impl<T> SwapMechanism<T> {
+    fn swap_buffers<F: FnMut()>(&mut self, mut if_suboptimal: F, mut after_swap: impl FnMut(SwapchainAcquireFuture, Arc<Framebuffer>, &Subbuffer<T>, Arc<PersistentDescriptorSet>, SwapchainPresentInfo, F)) {
         let (image_index, suboptimal, acquire_future) = match swapchain::acquire_next_image(self.swapchain.clone(), None).map_err(Validated::unwrap) {
             Ok(r) => r,
             Err(VulkanError::OutOfDate) => {
@@ -101,6 +116,15 @@ impl SwapMechanism {
             SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index),
             if_suboptimal,
         );
+    }
+
+    fn recreate(&mut self, new_dimensions: PhysicalSize<u32>) -> Vec<Arc<Image>> {
+        let (swapchain, images) = self.swapchain.recreate(SwapchainCreateInfo {
+            image_extent: new_dimensions.into(),
+            ..self.swapchain.create_info()
+        }).unwrap();
+        self.swapchain = swapchain;
+        images
     }
 }
 
@@ -202,7 +226,7 @@ impl ApplicationHandler for Game {
                         [],
                     ).unwrap()
                 }).collect::<Vec<_>>();
-                *self = Game::Init(GameData {
+                *self = Game::Init(GraphicsEngine {
                     device: device.clone(),
                     queue,
                     window,
@@ -267,32 +291,19 @@ impl ApplicationHandler for Game {
             WindowEvent::MouseWheel { .. } => {}
             WindowEvent::MouseInput { .. } => {}
             WindowEvent::RedrawRequested => {
-                if let Game::Init(game) = self {
-                    let now = Instant::now();
-                    let delta = now - game.last_frame;
-                    game.frames += 1;
-                    game.time += delta.as_secs_f32();
-                    if game.time >= 1.0 {
-                        info!("FPS: {} / {:.1}%", game.frames, 100.0 * 120.0 / game.frames as f32);
-                        game.frames = 0;
-                        game.time = 0.0;
+                if let Game::Init(engine) = self {
+                    engine.update_fps();
+                    if engine.window_resized || engine.recreate_swapchain {
+                        engine.window_resized = false;
+                        engine.recreate_swapchain = false;
+                        let new_dimensions = engine.window.inner_size();
+                        let new_images = engine.swap_mechanism.recreate(new_dimensions);
+                        let (new_framebuffers, new_pipeline) = get_framebuffers_and_pipeline(new_dimensions, &new_images, engine.render_pass.clone(), engine.memory_allocator.clone(), engine.vs.entry_point("main").unwrap(), engine.fs.entry_point("main").unwrap());
+                        engine.pipeline = new_pipeline;
+                        engine.swap_mechanism.framebuffers = new_framebuffers;
                     }
-                    game.last_frame = now;
-                    if game.window_resized || game.recreate_swapchain {
-                        game.window_resized = false;
-                        game.recreate_swapchain = false;
-                        let new_dimensions = game.window.inner_size();
-                        let (new_swapchain, new_images) = game.swap_mechanism.swapchain.recreate(SwapchainCreateInfo {
-                            image_extent: new_dimensions.into(),
-                            ..game.swap_mechanism.swapchain.create_info()
-                        }).expect("failed to recreate swapchain");
-                        game.swap_mechanism.swapchain = new_swapchain;
-                        let (new_framebuffers, new_pipeline) = get_framebuffers_and_pipeline(new_dimensions, &new_images, game.render_pass.clone(), game.memory_allocator.clone(), game.vs.entry_point("main").unwrap(), game.fs.entry_point("main").unwrap());
-                        game.pipeline = new_pipeline;
-                        game.swap_mechanism.framebuffers = new_framebuffers;
-                    }
-                    game.swap_mechanism.swap_buffers(|| game.recreate_swapchain = true, |acquire_future, framebuffer, uniform_buffer, descriptor_set, present_info, mut if_suboptimal| {
-                        let mut builder = AutoCommandBufferBuilder::primary(&game.command_buffer_allocator, game.queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
+                    engine.swap_mechanism.swap_buffers(|| engine.recreate_swapchain = true, |acquire_future, framebuffer, uniform_buffer, descriptor_set, present_info, mut if_suboptimal| {
+                        let mut builder = AutoCommandBufferBuilder::primary(&engine.command_buffer_allocator, engine.queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
                         builder
                             .begin_render_pass(
                                 RenderPassBeginInfo {
@@ -307,43 +318,43 @@ impl ApplicationHandler for Game {
                                     ..Default::default()
                                 },
                             ).unwrap()
-                            .bind_pipeline_graphics(game.pipeline.clone())
+                            .bind_pipeline_graphics(engine.pipeline.clone())
                             .unwrap()
-                            .bind_descriptor_sets(PipelineBindPoint::Graphics, game.pipeline.layout().clone(), 0, descriptor_set)
+                            .bind_descriptor_sets(PipelineBindPoint::Graphics, engine.pipeline.layout().clone(), 0, descriptor_set)
                             .unwrap()
-                            .bind_vertex_buffers(0, game.vertex_buffer.clone())
+                            .bind_vertex_buffers(0, engine.vertex_buffer.clone())
                             .unwrap()
-                            .draw(game.vertex_buffer.len() as u32, 1, 0, 0)
+                            .draw(engine.vertex_buffer.len() as u32, 1, 0, 0)
                             .unwrap()
                             .end_render_pass(Default::default())
                             .unwrap();
                         let command_buffer = builder.build().unwrap();
                         acquire_future.wait(None).unwrap();
-                        game.previous_frame_end.as_mut().unwrap().cleanup_finished();
+                        engine.previous_frame_end.as_mut().unwrap().cleanup_finished();
                         *uniform_buffer.write().unwrap() = vs::Data {
                             world: Mat4::IDENTITY.into(),
                             view: Mat4::look_to_rh((0.0, 0.0, 0.0), (0.0, 0.0, -1.0), Vec3::Y).into(),
-                            proj: Mat4::perspective(AngleDeg::new(50.0), game.window.inner_size().width as f32 / game.window.inner_size().height as f32, 0.01, 100.0).into(),
+                            proj: Mat4::perspective(AngleDeg::new(50.0), engine.window.inner_size().width as f32 / engine.window.inner_size().height as f32, 0.01, 100.0).into(),
                         };
-                        let future = game.previous_frame_end
-                                         .take()
-                                         .unwrap()
-                                         .join(acquire_future)
-                                         .then_execute(game.queue.clone(), command_buffer)
-                                         .unwrap()
-                                         .then_swapchain_present(game.queue.clone(), present_info)
-                                         .then_signal_fence_and_flush();
+                        let future = engine.previous_frame_end
+                                           .take()
+                                           .unwrap()
+                                           .join(acquire_future)
+                                           .then_execute(engine.queue.clone(), command_buffer)
+                                           .unwrap()
+                                           .then_swapchain_present(engine.queue.clone(), present_info)
+                                           .then_signal_fence_and_flush();
                         match future.map_err(Validated::unwrap) {
                             Ok(future) => {
-                                game.previous_frame_end = Some(future.boxed());
+                                engine.previous_frame_end = Some(future.boxed());
                             }
                             Err(VulkanError::OutOfDate) => {
                                 if_suboptimal();
-                                game.previous_frame_end = Some(sync::now(game.device.clone()).boxed());
+                                engine.previous_frame_end = Some(sync::now(engine.device.clone()).boxed());
                             }
                             Err(e) => {
                                 error!("failed to flush future: {e}");
-                                game.previous_frame_end = Some(sync::now(game.device.clone()).boxed());
+                                engine.previous_frame_end = Some(sync::now(engine.device.clone()).boxed());
                             }
                         }
                     });
