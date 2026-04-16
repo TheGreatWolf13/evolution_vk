@@ -46,6 +46,8 @@ mod math;
 struct MyVertex {
     #[format(R32G32B32_SFLOAT)]
     position: [f32; 3],
+    #[format(R32G32B32_SFLOAT)]
+    color: [f32; 3],
 }
 
 enum Game {
@@ -185,12 +187,15 @@ impl ApplicationHandler for Game {
                 let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
                 let vertex1 = MyVertex {
                     position: [-0.5, -0.5, 0.0],
+                    color: [1.0, 0.0, 0.0],
                 };
                 let vertex2 = MyVertex {
                     position: [0.0, 0.5, 0.0],
+                    color: [1.0, 0.0, 0.0],
                 };
                 let vertex3 = MyVertex {
                     position: [0.5, -0.25, 0.0],
+                    color: [1.0, 0.0, 0.0],
                 };
                 let vertex_buffer = Buffer::from_iter(
                     memory_allocator.clone(),
@@ -372,6 +377,9 @@ mod vs {
             #version 460
 
             layout(location = 0) in vec3 position;
+            layout(location = 1) in vec3 color;
+
+            layout(location = 0) out vec3 v_color;
 
             layout(set = 0, binding = 0) uniform Data {
                 mat4 world;
@@ -382,6 +390,7 @@ mod vs {
             void main() {
                 mat4 worldview = uniforms.view * uniforms.world;
                 gl_Position = uniforms.proj * worldview * vec4(position, 1.0);
+                v_color = color;
             }
         ",
     }
@@ -393,10 +402,12 @@ mod fs {
         src: r"
             #version 460
 
+            layout(location = 0) in vec3 color;
+
             layout(location = 0) out vec4 f_color;
 
             void main() {
-                f_color = vec4(1.0, 0.0, 0.0, 1.0);
+                f_color = vec4(color, 1.0);
             }
         ",
     }
