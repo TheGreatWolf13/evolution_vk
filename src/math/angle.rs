@@ -1,4 +1,6 @@
-﻿use crate::{impl_bin_op, impl_deref};
+﻿use crate::math::quat::Quat;
+use crate::math::vec3::Vec3;
+use crate::{impl_bin_op, impl_deref};
 use std::f32::consts::PI;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
@@ -189,6 +191,13 @@ impl Rot3Deg {
     #[inline]
     pub const fn z_mut(&mut self) -> &mut AngleDeg {
         &mut self.2
+    }
+
+    pub fn to_quat(&self) -> Quat {
+        let mut quat = Quat::from_axis_angle(Vec3::Z, self.z());
+        quat *= Quat::from_axis_angle(Vec3::Y, self.y());
+        quat *= Quat::from_axis_angle(Vec3::X, self.x());
+        quat
     }
 }
 

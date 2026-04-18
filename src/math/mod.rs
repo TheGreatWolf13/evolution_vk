@@ -70,11 +70,28 @@ macro_rules! impl_un_op {
     };
 }
 
+pub struct PaP<T>(pub T, pub T);
+
+impl<T: Copy> PaP<T> {
+    #[inline]
+    pub fn new(t: T) -> Self {
+        PaP(t, t)
+    }
+}
+
+impl<T: Lerp + Copy> PaP<T> {
+    #[inline]
+    pub fn lerp(&self, partial_tick: f32) -> T {
+        self.1.lerp(self.0, partial_tick)
+    }
+}
+
 pub trait Lerp {
     fn lerp(&self, other: Self, t: f32) -> Self;
 }
 
 impl<M: Mul<f32, Output = Self> + Add<Output = Self> + Copy> Lerp for M {
+    #[inline]
     fn lerp(&self, other: Self, t: f32) -> Self {
         let now = *self * t;
         let prev = other * (1.0 - t);
