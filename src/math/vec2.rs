@@ -2,6 +2,7 @@
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
+use winit::dpi::PhysicalSize;
 
 #[derive(Copy, Clone)]
 pub struct Vec2(glam::Vec2);
@@ -62,5 +63,6 @@ impl_bin_op!(Vec2 * f32: Mul mul, (self, rhs) => Self(self.0 * rhs));
 //From
 impl_from!((f32, f32) as Vec2: v => Self(glam::Vec2::from(v)));
 impl_from!([f32; 2] as Vec2: v => Self(glam::Vec2::from(v)));
+impl_from!(PhysicalSize<u32> as Vec2: v => Self(glam::Vec2::new(v.width as f32, v.height as f32)));
 impl_from!(Vec2 as (f32, f32): v => (v.x(), v.y()));
 impl_from!(Vec2 as [f32; 2]: v => [v.x(), v.y()]);

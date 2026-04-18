@@ -30,3 +30,15 @@ macro_rules! impl_deref {
         }
     };
 }
+
+#[macro_export]
+macro_rules! if_else {
+    ($e:expr => $if_true:expr ; $if_false:expr) => {
+        if $e {
+            $if_true
+        } //
+        else {
+            $if_false
+        }
+    }
+}

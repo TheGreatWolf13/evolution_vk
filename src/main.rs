@@ -1,6 +1,6 @@
-use crate::math::angle::AngleDeg;
+use crate::client::camera::Camera;
+use crate::client::input::Input;
 use crate::math::mat4::Mat4;
-use crate::math::vec3::Vec3;
 use log::{error, info};
 use smallvec::smallvec;
 use std::sync::Arc;
@@ -40,6 +40,7 @@ use winit::window::{Window, WindowAttributes, WindowId};
 
 mod util;
 mod math;
+mod client;
 
 #[derive(BufferContents, Vertex)]
 #[repr(C)]
@@ -52,7 +53,13 @@ struct MyVertex {
 
 enum Game {
     Uninit,
-    Init(GraphicsEngine),
+    Init(GameData),
+}
+
+struct GameData {
+    graphics: GraphicsEngine,
+    input: Input,
+    camera: Camera,
 }
 
 struct GraphicsEngine {
@@ -186,16 +193,16 @@ impl ApplicationHandler for Game {
                 let render_pass = get_render_pass(device.clone(), swapchain.clone());
                 let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
                 let vertex1 = MyVertex {
-                    position: [-0.5, -0.5, 0.0],
+                    position: [-0.5, -0.5, 1.0],
                     color: [1.0, 0.0, 0.0],
                 };
                 let vertex2 = MyVertex {
-                    position: [0.0, 0.5, 0.0],
-                    color: [1.0, 0.0, 0.0],
+                    position: [0.0, 0.5, 1.0],
+                    color: [0.0, 1.0, 0.0],
                 };
                 let vertex3 = MyVertex {
-                    position: [0.5, -0.25, 0.0],
-                    color: [1.0, 0.0, 0.0],
+                    position: [0.5, -0.25, 1.0],
+                    color: [0.0, 0.0, 1.0],
                 };
                 let vertex_buffer = Buffer::from_iter(
                     memory_allocator.clone(),
@@ -231,35 +238,39 @@ impl ApplicationHandler for Game {
                         [],
                     ).unwrap()
                 }).collect::<Vec<_>>();
-                *self = Game::Init(GraphicsEngine {
-                    device: device.clone(),
-                    queue,
-                    window,
-                    pipeline,
-                    render_pass,
-                    memory_allocator,
-                    vs,
-                    fs,
-                    vertex_buffer,
-                    command_buffer_allocator,
-                    swap_mechanism: SwapMechanism {
-                        swapchain,
-                        framebuffers,
-                        uniform_buffers,
-                        uniform_buffer_sets,
+                *self = Game::Init(GameData {
+                    graphics: GraphicsEngine {
+                        device: device.clone(),
+                        queue,
+                        window,
+                        pipeline,
+                        render_pass,
+                        memory_allocator,
+                        vs,
+                        fs,
+                        vertex_buffer,
+                        command_buffer_allocator,
+                        swap_mechanism: SwapMechanism {
+                            swapchain,
+                            framebuffers,
+                            uniform_buffers,
+                            uniform_buffer_sets,
+                        },
+                        previous_frame_end: Some(Box::new(sync::now(device)) as Box<dyn GpuFuture>),
+                        window_resized: false,
+                        recreate_swapchain: false,
+                        last_frame: Instant::now(),
+                        frames: 0,
+                        time: 0.0,
                     },
-                    previous_frame_end: Some(Box::new(sync::now(device)) as Box<dyn GpuFuture>),
-                    window_resized: false,
-                    recreate_swapchain: false,
-                    last_frame: Instant::now(),
-                    frames: 0,
-                    time: 0.0,
+                    input: Input::new(),
+                    camera: Camera::new(),
                 });
                 event_loop.set_control_flow(ControlFlow::Poll);
             }
             StartCause::Poll => {
                 if let Game::Init(data) = self {
-                    data.window.request_redraw();
+                    data.graphics.window.request_redraw();
                 }
             }
             _ => {}
@@ -274,7 +285,7 @@ impl ApplicationHandler for Game {
         match event {
             WindowEvent::Resized(_) => {
                 if let Game::Init(data) = self {
-                    data.window_resized = true;
+                    data.graphics.window_resized = true;
                 }
             }
             WindowEvent::Moved(_) => {}
@@ -287,7 +298,14 @@ impl ApplicationHandler for Game {
             WindowEvent::HoveredFile(_) => {}
             WindowEvent::HoveredFileCancelled => {}
             WindowEvent::Focused(_) => {}
-            WindowEvent::KeyboardInput { .. } => {}
+            WindowEvent::KeyboardInput {
+                event,
+                ..
+            } => {
+                if let Game::Init(data) = self {
+                    data.input.process_input(event);
+                }
+            }
             WindowEvent::ModifiersChanged(_) => {}
             WindowEvent::Ime(_) => {}
             WindowEvent::CursorMoved { .. } => {}
@@ -296,7 +314,10 @@ impl ApplicationHandler for Game {
             WindowEvent::MouseWheel { .. } => {}
             WindowEvent::MouseInput { .. } => {}
             WindowEvent::RedrawRequested => {
-                if let Game::Init(engine) = self {
+                if let Game::Init(data) = self {
+                    let engine = &mut data.graphics;
+                    data.input.tick(&mut data.camera);
+                    data.camera.adjust(engine.window.inner_size());
                     engine.update_fps();
                     if engine.window_resized || engine.recreate_swapchain {
                         engine.window_resized = false;
@@ -313,7 +334,7 @@ impl ApplicationHandler for Game {
                             .begin_render_pass(
                                 RenderPassBeginInfo {
                                     clear_values: vec![
-                                        Some([0.0, 0.0, 1.0, 1.0].into()),
+                                        Some([0.0, 0.0, 0.0, 1.0].into()),
                                         Some(1.0.into()),
                                     ],
                                     ..RenderPassBeginInfo::framebuffer(framebuffer)
@@ -338,8 +359,8 @@ impl ApplicationHandler for Game {
                         engine.previous_frame_end.as_mut().unwrap().cleanup_finished();
                         *uniform_buffer.write().unwrap() = vs::Data {
                             world: Mat4::IDENTITY.into(),
-                            view: Mat4::look_to_rh((0.0, 0.0, 0.0), (0.0, 0.0, -1.0), Vec3::Y).into(),
-                            proj: Mat4::perspective(AngleDeg::new(50.0), engine.window.inner_size().width as f32 / engine.window.inner_size().height as f32, 0.01, 100.0).into(),
+                            view: data.camera.get_view().into(),
+                            proj: data.camera.get_proj().into(),
                         };
                         let future = engine.previous_frame_end
                                            .take()
