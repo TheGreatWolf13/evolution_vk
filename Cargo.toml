@@ -19,3 +19,6 @@ enum-map = "2.7.3"
 
 [profile.dev]
 opt-level = 1
+
+[profile.release]
+debug = true
