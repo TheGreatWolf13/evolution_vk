@@ -2,8 +2,10 @@
 use crate::math::mat4::Mat4;
 use crate::math::vec2::Vec2;
 use crate::math::vec3::Vec3;
+use crate::math::Lerp;
 
 pub struct Camera {
+    pos0: Vec3,
     pos: Vec3,
     view: Mat4,
     proj: Mat4,
@@ -12,15 +14,16 @@ pub struct Camera {
 impl Camera {
     pub fn new() -> Self {
         Self {
+            pos0: Vec3::ZERO,
             pos: Vec3::ZERO,
             view: Mat4::IDENTITY,
             proj: Mat4::IDENTITY,
         }
     }
 
-    pub fn adjust(&mut self, window_size: impl Into<Vec2>) {
+    pub fn adjust(&mut self, window_size: impl Into<Vec2>, partial_tick: f32) {
         let window_size = window_size.into();
-        self.view = Mat4::look_to_rh(self.pos, Vec3::Z, Vec3::Y);
+        self.view = Mat4::look_to_rh(self.pos.lerp(self.pos0, partial_tick), Vec3::Z, Vec3::Y);
         self.proj = Mat4::perspective(AngleDeg::new(60.0), window_size.x() / window_size.y(), 0.0625, 1024.0);
     }
 
@@ -29,6 +32,7 @@ impl Camera {
     }
 
     pub fn r#move(&mut self, delta: impl Into<Vec3>) {
+        self.pos0 = self.pos;
         self.pos += delta.into();
     }
 

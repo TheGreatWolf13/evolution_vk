@@ -1,6 +1,7 @@
 ﻿use crate::util::error::Throwable;
 
 pub mod error;
+pub mod timer;
 
 pub type Result<T = ()> = core::result::Result<T, Throwable>;
 

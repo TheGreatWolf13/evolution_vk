@@ -1,8 +1,10 @@
 use crate::client::camera::Camera;
 use crate::client::input::Input;
 use crate::math::mat4::Mat4;
+use crate::util::timer::{FrameRateLimit, Timer};
 use log::{error, info};
 use smallvec::smallvec;
+use std::num::NonZero;
 use std::sync::Arc;
 use std::time::Instant;
 use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
@@ -60,6 +62,7 @@ struct GameData {
     graphics: GraphicsEngine,
     input: Input,
     camera: Camera,
+    timer: Timer,
 }
 
 struct GraphicsEngine {
@@ -265,12 +268,13 @@ impl ApplicationHandler for Game {
                     },
                     input: Input::new(),
                     camera: Camera::new(),
+                    timer: Timer::new(NonZero::new(20).unwrap(), FrameRateLimit::Unlimited),
                 });
                 event_loop.set_control_flow(ControlFlow::Poll);
             }
             StartCause::Poll => {
                 if let Game::Init(data) = self {
-                    data.graphics.window.request_redraw();
+                    data.timer.wait(&data.graphics.window);
                 }
             }
             _ => {}
@@ -315,75 +319,80 @@ impl ApplicationHandler for Game {
             WindowEvent::MouseInput { .. } => {}
             WindowEvent::RedrawRequested => {
                 if let Game::Init(data) = self {
-                    let engine = &mut data.graphics;
-                    data.input.tick(&mut data.camera);
-                    data.camera.adjust(engine.window.inner_size());
-                    engine.update_fps();
-                    if engine.window_resized || engine.recreate_swapchain {
-                        engine.window_resized = false;
-                        engine.recreate_swapchain = false;
-                        let new_dimensions = engine.window.inner_size();
-                        let new_images = engine.swap_mechanism.recreate(new_dimensions);
-                        let (new_framebuffers, new_pipeline) = get_framebuffers_and_pipeline(new_dimensions, &new_images, engine.render_pass.clone(), engine.memory_allocator.clone(), engine.vs.entry_point("main").unwrap(), engine.fs.entry_point("main").unwrap());
-                        engine.pipeline = new_pipeline;
-                        engine.swap_mechanism.framebuffers = new_framebuffers;
-                    }
-                    engine.swap_mechanism.swap_buffers(|| engine.recreate_swapchain = true, |acquire_future, framebuffer, uniform_buffer, descriptor_set, present_info, mut if_suboptimal| {
-                        let mut builder = AutoCommandBufferBuilder::primary(&engine.command_buffer_allocator, engine.queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
-                        builder
-                            .begin_render_pass(
-                                RenderPassBeginInfo {
-                                    clear_values: vec![
-                                        Some([0.0, 0.0, 0.0, 1.0].into()),
-                                        Some(1.0.into()),
-                                    ],
-                                    ..RenderPassBeginInfo::framebuffer(framebuffer)
-                                },
-                                SubpassBeginInfo {
-                                    contents: SubpassContents::Inline,
-                                    ..Default::default()
-                                },
-                            ).unwrap()
-                            .bind_pipeline_graphics(engine.pipeline.clone())
-                            .unwrap()
-                            .bind_descriptor_sets(PipelineBindPoint::Graphics, engine.pipeline.layout().clone(), 0, descriptor_set)
-                            .unwrap()
-                            .bind_vertex_buffers(0, engine.vertex_buffer.clone())
-                            .unwrap()
-                            .draw(engine.vertex_buffer.len() as u32, 1, 0, 0)
-                            .unwrap()
-                            .end_render_pass(Default::default())
-                            .unwrap();
-                        let command_buffer = builder.build().unwrap();
-                        acquire_future.wait(None).unwrap();
-                        engine.previous_frame_end.as_mut().unwrap().cleanup_finished();
-                        *uniform_buffer.write().unwrap() = vs::Data {
-                            world: Mat4::IDENTITY.into(),
-                            view: data.camera.get_view().into(),
-                            proj: data.camera.get_proj().into(),
-                        };
-                        let future = engine.previous_frame_end
-                                           .take()
-                                           .unwrap()
-                                           .join(acquire_future)
-                                           .then_execute(engine.queue.clone(), command_buffer)
-                                           .unwrap()
-                                           .then_swapchain_present(engine.queue.clone(), present_info)
-                                           .then_signal_fence_and_flush();
-                        match future.map_err(Validated::unwrap) {
-                            Ok(future) => {
-                                engine.previous_frame_end = Some(future.boxed());
-                            }
-                            Err(VulkanError::OutOfDate) => {
-                                if_suboptimal();
-                                engine.previous_frame_end = Some(sync::now(engine.device.clone()).boxed());
-                            }
-                            Err(e) => {
-                                error!("failed to flush future: {e}");
-                                engine.previous_frame_end = Some(sync::now(engine.device.clone()).boxed());
-                            }
-                        }
+                    data.timer.try_tick(|| {
+                        data.input.tick(&mut data.camera);
                     });
+                    data.timer.try_frame(|partial_tick| {
+                        let engine = &mut data.graphics;
+                        data.camera.adjust(engine.window.inner_size(), partial_tick);
+                        engine.update_fps();
+                        if engine.window_resized || engine.recreate_swapchain {
+                            engine.window_resized = false;
+                            engine.recreate_swapchain = false;
+                            let new_dimensions = engine.window.inner_size();
+                            let new_images = engine.swap_mechanism.recreate(new_dimensions);
+                            let (new_framebuffers, new_pipeline) = get_framebuffers_and_pipeline(new_dimensions, &new_images, engine.render_pass.clone(), engine.memory_allocator.clone(), engine.vs.entry_point("main").unwrap(), engine.fs.entry_point("main").unwrap());
+                            engine.pipeline = new_pipeline;
+                            engine.swap_mechanism.framebuffers = new_framebuffers;
+                        }
+                        engine.swap_mechanism.swap_buffers(|| engine.recreate_swapchain = true, |acquire_future, framebuffer, uniform_buffer, descriptor_set, present_info, mut if_suboptimal| {
+                            let mut builder = AutoCommandBufferBuilder::primary(&engine.command_buffer_allocator, engine.queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
+                            builder
+                                .begin_render_pass(
+                                    RenderPassBeginInfo {
+                                        clear_values: vec![
+                                            Some([0.0, 0.0, 0.0, 1.0].into()),
+                                            Some(1.0.into()),
+                                        ],
+                                        ..RenderPassBeginInfo::framebuffer(framebuffer)
+                                    },
+                                    SubpassBeginInfo {
+                                        contents: SubpassContents::Inline,
+                                        ..Default::default()
+                                    },
+                                ).unwrap()
+                                .bind_pipeline_graphics(engine.pipeline.clone())
+                                .unwrap()
+                                .bind_descriptor_sets(PipelineBindPoint::Graphics, engine.pipeline.layout().clone(), 0, descriptor_set)
+                                .unwrap()
+                                .bind_vertex_buffers(0, engine.vertex_buffer.clone())
+                                .unwrap()
+                                .draw(engine.vertex_buffer.len() as u32, 1, 0, 0)
+                                .unwrap()
+                                .end_render_pass(Default::default())
+                                .unwrap();
+                            let command_buffer = builder.build().unwrap();
+                            acquire_future.wait(None).unwrap();
+                            engine.previous_frame_end.as_mut().unwrap().cleanup_finished();
+                            *uniform_buffer.write().unwrap() = vs::Data {
+                                world: Mat4::IDENTITY.into(),
+                                view: data.camera.get_view().into(),
+                                proj: data.camera.get_proj().into(),
+                            };
+                            let future = engine.previous_frame_end
+                                               .take()
+                                               .unwrap()
+                                               .join(acquire_future)
+                                               .then_execute(engine.queue.clone(), command_buffer)
+                                               .unwrap()
+                                               .then_swapchain_present(engine.queue.clone(), present_info)
+                                               .then_signal_fence_and_flush();
+                            match future.map_err(Validated::unwrap) {
+                                Ok(future) => {
+                                    engine.previous_frame_end = Some(future.boxed());
+                                }
+                                Err(VulkanError::OutOfDate) => {
+                                    if_suboptimal();
+                                    engine.previous_frame_end = Some(sync::now(engine.device.clone()).boxed());
+                                }
+                                Err(e) => {
+                                    error!("failed to flush future: {e}");
+                                    engine.previous_frame_end = Some(sync::now(engine.device.clone()).boxed());
+                                }
+                            }
+                        });
+                    });
+                    data.timer.wait(&data.graphics.window);
                 }
             }
             _ => {}

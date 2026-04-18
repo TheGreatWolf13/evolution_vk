@@ -16,6 +16,8 @@ glam = "0.32.1"
 smallvec = "1.15.1"
 modular-bitfield = "0.13.1"
 enum-map = "2.7.3"
+spin_sleep = "1.3.3"
+light_ranged_integers = "0.1.3"
 
 [profile.dev]
 opt-level = 1

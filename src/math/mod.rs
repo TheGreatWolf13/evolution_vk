@@ -1,4 +1,6 @@
-﻿pub mod angle;
+﻿use std::ops::{Add, Mul};
+
+pub mod angle;
 pub mod color;
 pub mod mat3;
 pub mod mat4;
@@ -66,4 +68,16 @@ macro_rules! impl_un_op {
             }
         }
     };
+}
+
+pub trait Lerp {
+    fn lerp(&self, other: Self, t: f32) -> Self;
+}
+
+impl<M: Mul<f32, Output = Self> + Add<Output = Self> + Copy> Lerp for M {
+    fn lerp(&self, other: Self, t: f32) -> Self {
+        let now = *self * t;
+        let prev = other * (1.0 - t);
+        now + prev
+    }
 }
