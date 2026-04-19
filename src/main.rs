@@ -36,9 +36,9 @@ use vulkano::sync::GpuFuture;
 use vulkano::{swapchain, sync, Validated, VulkanError, VulkanLibrary};
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
-use winit::event::{StartCause, WindowEvent};
+use winit::event::{DeviceEvent, DeviceId, StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowAttributes, WindowId};
+use winit::window::{CursorGrabMode, Window, WindowAttributes, WindowId};
 
 mod util;
 mod math;
@@ -83,6 +83,7 @@ struct GraphicsEngine {
     last_frame: Instant,
     frames: u32,
     time: f32,
+    window_focused: bool,
 }
 
 struct SwapMechanism<T> {
@@ -104,6 +105,17 @@ impl GraphicsEngine {
             self.time = 0.0;
         }
         self.last_frame = now;
+    }
+
+    fn grab_mouse(&self, grab: bool) {
+        if grab {
+            self.window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+            self.window.set_cursor_visible(false);
+        } //
+        else {
+            self.window.set_cursor_grab(CursorGrabMode::None).unwrap();
+            self.window.set_cursor_visible(true);
+        }
     }
 }
 
@@ -265,6 +277,7 @@ impl ApplicationHandler for Game {
                         last_frame: Instant::now(),
                         frames: 0,
                         time: 0.0,
+                        window_focused: true,
                     },
                     input: Input::new(),
                     camera: Camera::new(),
@@ -282,7 +295,9 @@ impl ApplicationHandler for Game {
     }
 
     fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
-        info!("Application resumed");
+        if let Game::Init(data) = self {
+            data.graphics.grab_mouse(true);
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
@@ -301,7 +316,11 @@ impl ApplicationHandler for Game {
             WindowEvent::DroppedFile(_) => {}
             WindowEvent::HoveredFile(_) => {}
             WindowEvent::HoveredFileCancelled => {}
-            WindowEvent::Focused(_) => {}
+            WindowEvent::Focused(focused) => {
+                if let Game::Init(data) = self {
+                    data.graphics.window_focused = focused;
+                }
+            }
             WindowEvent::KeyboardInput {
                 event,
                 ..
@@ -316,7 +335,15 @@ impl ApplicationHandler for Game {
             WindowEvent::CursorEntered { .. } => {}
             WindowEvent::CursorLeft { .. } => {}
             WindowEvent::MouseWheel { .. } => {}
-            WindowEvent::MouseInput { .. } => {}
+            WindowEvent::MouseInput {
+                device_id: _,
+                button,
+                state
+            } => {
+                if let Game::Init(data) = self {
+                    data.input.process_mouse_button(button, state);
+                }
+            }
             WindowEvent::RedrawRequested => {
                 if let Game::Init(data) = self {
                     data.timer.try_tick(|| {
@@ -395,6 +422,26 @@ impl ApplicationHandler for Game {
                 }
             }
             _ => {}
+        }
+    }
+
+    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
+        match event {
+            DeviceEvent::Added => {}
+            DeviceEvent::Removed => {}
+            DeviceEvent::MouseMotion {
+                delta
+            } => {
+                if let Game::Init(data) = self {
+                    if data.graphics.window_focused {
+                        data.input.process_mouse_motion(delta);
+                    }
+                }
+            }
+            DeviceEvent::MouseWheel { .. } => {}
+            DeviceEvent::Motion { .. } => {}
+            DeviceEvent::Button { .. } => {}
+            DeviceEvent::Key(_) => {}
         }
     }
 }
