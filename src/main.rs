@@ -196,15 +196,15 @@ impl ApplicationHandler for Game {
                 let render_pass = get_render_pass(device.clone(), swapchain.clone());
                 let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
                 let vertex1 = MyVertex {
-                    position: [-0.5, -0.5, 1.0],
+                    position: [0.5, 0.5, -1.0],
                     color: [1.0, 0.0, 0.0],
                 };
                 let vertex2 = MyVertex {
-                    position: [0.0, 0.5, 1.0],
+                    position: [0.5, 0.0, -1.0],
                     color: [0.0, 1.0, 0.0],
                 };
                 let vertex3 = MyVertex {
-                    position: [0.5, -0.25, 1.0],
+                    position: [0.0, 0.5, -1.0],
                     color: [0.0, 0.0, 1.0],
                 };
                 let vertex_buffer = Buffer::from_iter(
@@ -392,7 +392,6 @@ impl ApplicationHandler for Game {
                             }
                         });
                     });
-                    data.timer.wait(&data.graphics.window);
                 }
             }
             _ => {}
@@ -418,8 +417,7 @@ mod vs {
             } uniforms;
 
             void main() {
-                mat4 worldview = uniforms.view * uniforms.world;
-                gl_Position = uniforms.proj * worldview * vec4(position, 1.0);
+                gl_Position = uniforms.proj * uniforms.view * uniforms.world * vec4(position, 1.0);
                 v_color = color;
             }
         ",
@@ -534,8 +532,8 @@ fn get_framebuffers_and_pipeline(window_size: PhysicalSize<u32>, images: &Vec<Ar
                 input_assembly_state: Some(InputAssemblyState::default()),
                 viewport_state: Some(ViewportState {
                     viewports: smallvec![Viewport {
-                        offset: [0.0, 0.0],
-                        extent: window_size.into(),
+                        offset: [0.0, window_size.height as f32],
+                        extent: [window_size.width as f32, -(window_size.height as f32)],
                         depth_range: 0.0..=1.0,
                     }],
                     ..Default::default()

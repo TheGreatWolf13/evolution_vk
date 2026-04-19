@@ -82,11 +82,11 @@ impl Input {
     pub fn tick(&mut self, camera: &mut Camera) {
         const SPEED: f32 = 0.025;
         const SENSITIVITY: f32 = 2.0;
-        let mut forward = if_else!(self.bindings[BindingType::Forward].is_down => 1.0 ; 0.0);
-        forward += if_else!(self.bindings[BindingType::Backward].is_down => -1.0 ; 0.0);
+        let mut forward = if_else!(self.bindings[BindingType::Backward].is_down => 1.0 ; 0.0);
+        forward += if_else!(self.bindings[BindingType::Forward].is_down => -1.0 ; 0.0);
         forward *= SPEED;
-        let mut left = if_else!(self.bindings[BindingType::Left].is_down => 1.0 ; 0.0);
-        left += if_else!(self.bindings[BindingType::Right].is_down => -1.0 ; 0.0);
+        let mut left = if_else!(self.bindings[BindingType::Right].is_down => 1.0 ; 0.0);
+        left += if_else!(self.bindings[BindingType::Left].is_down => -1.0 ; 0.0);
         left *= SPEED;
         let mut up = if_else!(self.bindings[BindingType::Up].is_down => 1.0 ; 0.0);
         up += if_else!(self.bindings[BindingType::Down].is_down => -1.0 ; 0.0);

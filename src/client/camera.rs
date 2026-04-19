@@ -24,13 +24,14 @@ impl Camera {
     pub fn adjust(&mut self, window_size: impl Into<Vec2>, partial_tick: f32) {
         let window_size = window_size.into();
         let quat = self.rot.lerp(partial_tick).to_quat();
-        self.view = Mat4::look_to_rh(self.pos.lerp(partial_tick), quat * Vec3::Z, quat * Vec3::Y);
+        self.view = Mat4::look_to(self.pos.lerp(partial_tick), quat * -Vec3::Z, quat * Vec3::Y);
         self.proj = Mat4::perspective(AngleDeg::new(60.0), window_size.x() / window_size.y(), 0.0625, 1024.0);
     }
 
     pub fn r#move(&mut self, delta: impl Into<Vec3>) {
         self.pos.0 = self.pos.1;
-        self.pos.1 += delta.into();
+        let quat = self.rot.1.to_quat();
+        self.pos.1 += quat * delta.into();
     }
 
     pub fn rotate(&mut self, rot: Rot3Deg) {

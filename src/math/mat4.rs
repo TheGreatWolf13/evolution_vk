@@ -44,7 +44,7 @@ impl Mat4 {
     }
 
     #[inline]
-    pub fn look_to_rh(eye: impl Into<Vec3>, target: impl Into<Vec3>, up: impl Into<Vec3>) -> Self {
+    pub fn look_to(eye: impl Into<Vec3>, target: impl Into<Vec3>, up: impl Into<Vec3>) -> Self {
         let eye = eye.into();
         let target = target.into();
         let up = up.into();
