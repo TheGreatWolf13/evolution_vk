@@ -70,6 +70,7 @@ macro_rules! impl_un_op {
     };
 }
 
+///Stands for "Past and Present", as it holds a past value and a present value.
 pub struct PaP<T>(pub T, pub T);
 
 impl<T: Copy> PaP<T> {
