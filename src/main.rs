@@ -603,7 +603,6 @@ fn main() {
     }
     env_logger::init();
     info!("Initializing Evolution VK");
-    dbg!(size_of::<Keybinding>());
     let event_loop = EventLoop::new().unwrap();
     let mut game = Game::Uninit;
     event_loop.run_app(&mut game).unwrap();
