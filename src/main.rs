@@ -1,5 +1,6 @@
 use crate::client::camera::Camera;
-use crate::client::input::Input;
+use crate::client::input::{keybinding::Keybinding, Input};
+use crate::client::vertex::{Vertex, VertexPosCol};
 use crate::math::mat4::Mat4;
 use crate::util::timer::{FrameRateLimit, Timer};
 use log::{error, info};
@@ -7,7 +8,7 @@ use smallvec::smallvec;
 use std::num::NonZero;
 use std::sync::Arc;
 use std::time::Instant;
-use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
+use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents};
 use vulkano::descriptor_set::allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo};
@@ -24,7 +25,7 @@ use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
-use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
+use vulkano::pipeline::graphics::vertex_input::{Vertex as VertexLayout, VertexDefinition};
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
@@ -35,7 +36,7 @@ use vulkano::swapchain::{PresentMode, Surface, Swapchain, SwapchainAcquireFuture
 use vulkano::sync::GpuFuture;
 use vulkano::{swapchain, sync, Validated, VulkanError, VulkanLibrary};
 use winit::application::ApplicationHandler;
-use winit::dpi::PhysicalSize;
+use winit::dpi::{LogicalPosition, PhysicalSize, Position};
 use winit::event::{DeviceEvent, DeviceId, StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{CursorGrabMode, Window, WindowAttributes, WindowId};
@@ -43,15 +44,6 @@ use winit::window::{CursorGrabMode, Window, WindowAttributes, WindowId};
 mod util;
 mod math;
 mod client;
-
-#[derive(BufferContents, Vertex)]
-#[repr(C)]
-struct MyVertex {
-    #[format(R32G32B32_SFLOAT)]
-    position: [f32; 3],
-    #[format(R32G32B32_SFLOAT)]
-    color: [f32; 3],
-}
 
 enum Game {
     Uninit,
@@ -73,7 +65,7 @@ struct GraphicsEngine {
     command_buffer_allocator: StandardCommandBufferAllocator,
     pipeline: Arc<GraphicsPipeline>,
     render_pass: Arc<RenderPass>,
-    vertex_buffer: Subbuffer<[MyVertex]>,
+    vertex_buffer: Subbuffer<[VertexPosCol]>,
     vs: Arc<ShaderModule>,
     fs: Arc<ShaderModule>,
     swap_mechanism: SwapMechanism<vs::Data>,
@@ -84,6 +76,7 @@ struct GraphicsEngine {
     frames: u32,
     time: f32,
     window_focused: bool,
+    mouse_grabbed: bool,
 }
 
 struct SwapMechanism<T> {
@@ -107,14 +100,23 @@ impl GraphicsEngine {
         self.last_frame = now;
     }
 
-    fn grab_mouse(&self, grab: bool) {
+    pub fn toggle_grab_mouse(&mut self) {
+        self.grab_mouse(!self.mouse_grabbed);
+    }
+
+    fn grab_mouse(&mut self, grab: bool) {
+        let size = self.window.inner_size();
         if grab {
+            self.window.set_cursor_position(Position::Logical(LogicalPosition::new(size.width as f64 / 2.0, size.height as f64 / 2.0))).unwrap();
             self.window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
             self.window.set_cursor_visible(false);
+            self.mouse_grabbed = true;
         } //
         else {
             self.window.set_cursor_grab(CursorGrabMode::None).unwrap();
+            self.window.set_cursor_position(Position::Logical(LogicalPosition::new(size.width as f64 / 2.0, size.height as f64 / 2.0))).unwrap();
             self.window.set_cursor_visible(true);
+            self.mouse_grabbed = false;
         }
     }
 }
@@ -207,18 +209,9 @@ impl ApplicationHandler for Game {
                 };
                 let render_pass = get_render_pass(device.clone(), swapchain.clone());
                 let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-                let vertex1 = MyVertex {
-                    position: [0.5, 0.5, -1.0],
-                    color: [1.0, 0.0, 0.0],
-                };
-                let vertex2 = MyVertex {
-                    position: [0.5, 0.0, -1.0],
-                    color: [0.0, 1.0, 0.0],
-                };
-                let vertex3 = MyVertex {
-                    position: [0.0, 0.5, -1.0],
-                    color: [0.0, 0.0, 1.0],
-                };
+                let v1 = Vertex::new().pos(0.5, 0.5, -1.0).color(1.0, 0.0, 0.0);
+                let v2 = Vertex::new().pos(0.5, 0.0, -1.0).color(0.0, 1.0, 0.0);
+                let v3 = Vertex::new().pos(0.0, 0.5, -1.0).color(0.0, 0.0, 1.0);
                 let vertex_buffer = Buffer::from_iter(
                     memory_allocator.clone(),
                     BufferCreateInfo {
@@ -229,7 +222,7 @@ impl ApplicationHandler for Game {
                         memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                         ..Default::default()
                     },
-                    vec![vertex1, vertex2, vertex3],
+                    vec![v1, v2, v3],
                 ).unwrap();
                 let vs = vs::load(device.clone()).expect("failed to create shader module");
                 let fs = fs::load(device.clone()).expect("failed to create shader module");
@@ -278,6 +271,7 @@ impl ApplicationHandler for Game {
                         frames: 0,
                         time: 0.0,
                         window_focused: true,
+                        mouse_grabbed: false,
                     },
                     input: Input::new(),
                     camera: Camera::new(),
@@ -347,7 +341,7 @@ impl ApplicationHandler for Game {
             WindowEvent::RedrawRequested => {
                 if let Game::Init(data) = self {
                     data.timer.try_tick(|| {
-                        data.input.tick(&mut data.camera);
+                        data.input.tick(&mut data.camera, || data.graphics.toggle_grab_mouse());
                     });
                     data.timer.try_frame(|partial_tick| {
                         let engine = &mut data.graphics;
@@ -433,7 +427,7 @@ impl ApplicationHandler for Game {
                 delta
             } => {
                 if let Game::Init(data) = self {
-                    if data.graphics.window_focused {
+                    if data.graphics.window_focused && data.graphics.mouse_grabbed {
                         data.input.process_mouse_motion(delta);
                     }
                 }
@@ -563,7 +557,7 @@ fn get_framebuffers_and_pipeline(window_size: PhysicalSize<u32>, images: &Vec<Ar
         }).unwrap()
     }).collect();
     let pipeline = {
-        let vertex_input_state = [MyVertex::per_vertex()].definition(&vs.info().input_interface).unwrap();
+        let vertex_input_state = [VertexPosCol::per_vertex()].definition(&vs.info().input_interface).unwrap();
         let stages = [
             PipelineShaderStageCreateInfo::new(vs),
             PipelineShaderStageCreateInfo::new(fs),
@@ -609,6 +603,7 @@ fn main() {
     }
     env_logger::init();
     info!("Initializing Evolution VK");
+    dbg!(size_of::<Keybinding>());
     let event_loop = EventLoop::new().unwrap();
     let mut game = Game::Uninit;
     event_loop.run_app(&mut game).unwrap();
