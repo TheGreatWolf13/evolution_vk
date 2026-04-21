@@ -439,13 +439,16 @@ impl<T: BufferContents, V: VertexFormat> GraphicsEngine<T, V> {
 
     pub fn update_swapchain(&mut self) {
         if self.window_resized || self.recreate_swapchain {
-            self.window_resized = false;
-            self.recreate_swapchain = false;
             let new_dimensions = self.window.inner_size();
+            if new_dimensions.width == 0 || new_dimensions.height == 0 {
+                return;
+            }
             let new_images = self.swap_mechanism.recreate(new_dimensions);
             let (new_framebuffers, new_pipeline) = Self::get_framebuffers_and_pipeline(new_dimensions, &new_images, self.render_pass.clone(), self.memory_allocator.clone(), self.vs.entry_point("main").unwrap(), self.fs.entry_point("main").unwrap());
             self.pipeline = new_pipeline;
             self.swap_mechanism.framebuffers = new_framebuffers;
+            self.window_resized = false;
+            self.recreate_swapchain = false;
         }
     }
 }
