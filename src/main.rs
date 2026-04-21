@@ -148,7 +148,7 @@ fn main() {
     unsafe {
         std::env::set_var("RUST_LOG", "info");
     }
-    env_logger::init();
+    env_logger::builder().format_source_path(true).format_target(false).init();
     info!("Initializing Evolution VK");
     let event_loop = EventLoop::new().unwrap();
     let mut game = Game::Uninit;
