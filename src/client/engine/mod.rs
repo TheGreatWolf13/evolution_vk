@@ -194,7 +194,8 @@ impl<V: VertexFormat> GraphicsEngine<V> {
         self.frames += 1;
         self.time += delta.as_secs_f32();
         if self.time >= 1.0 {
-            info!("FPS: {} / {:.1}%", self.frames, 100.0 * 120.0 / self.frames as f32);
+            let (phys, virt) = memory_stats::memory_stats().map_or_else(|| (0, 0), |stats| (stats.physical_mem, stats.virtual_mem));
+            info!("FPS: {} / {:.1}% / Phys: {:.1}MB / Virt: {:.1}MB", self.frames, 100.0 * 120.0 / self.frames as f32, phys as f32 / 1024.0 / 1024.0, virt as f32 / 1024.0 / 1024.0);
             self.frames = 0;
             self.time = 0.0;
         }
