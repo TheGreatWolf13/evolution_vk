@@ -3,14 +3,10 @@ use crate::client::vertex::VertexFormat;
 use std::sync::Arc;
 use tuple_map::TupleMap2;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CopyBufferToImageInfo, PrimaryAutoCommandBuffer};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet};
 use vulkano::device::DeviceOwned;
-use vulkano::format::Format;
-use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo};
-use vulkano::image::view::ImageView;
-use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator};
 use vulkano::pipeline::graphics::color_blend::{AttachmentBlend, ColorBlendAttachmentState, ColorBlendState};
 use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
@@ -48,7 +44,7 @@ impl PipelineConsumer for AutoCommandBufferBuilder<PrimaryAutoCommandBuffer> {
 }
 
 impl<V: VertexFormat> Pipeline<V> {
-    pub fn new(vertices: Vec<V>, allocator: Arc<StandardMemoryAllocator>, ds_allocator: &Arc<StandardDescriptorSetAllocator>, render_pass: Arc<RenderPass>, swapchain: &SwapChain, uploader: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) -> Pipeline<V> {
+    pub fn new<R: IntoIterator<Item = WriteDescriptorSet>>(vertices: Vec<V>, allocator: Arc<StandardMemoryAllocator>, ds_allocator: &Arc<StandardDescriptorSetAllocator>, render_pass: Arc<RenderPass>, swapchain: &SwapChain, mut binding_maker: impl FnMut(&Subbuffer<V::Uniform>) -> R) -> Pipeline<V> {
         let device = allocator.device().clone();
         let (vs, fs) = V::load_shaders(device.clone());
         let (vs_entry, fs_entry) = (vs, fs).map(|s| s.entry_point("main").unwrap());
@@ -100,53 +96,11 @@ impl<V: VertexFormat> Pipeline<V> {
                 ..Default::default()
             }).unwrap()
         });
-        let texture = {
-            let image = image::open("res/assets/textures/test_r_g.png").unwrap().to_rgba8();
-            let extent = [image.width(), image.height(), 1];
-            let upload_buffer = Buffer::from_iter(
-                allocator.clone(),
-                BufferCreateInfo {
-                    usage: BufferUsage::TRANSFER_SRC,
-                    ..Default::default()
-                },
-                AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_HOST | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                    ..Default::default()
-                },
-                image.into_iter().cloned(),
-            ).unwrap();
-            let image = Image::new(
-                allocator.clone(),
-                ImageCreateInfo {
-                    image_type: ImageType::Dim2d,
-                    format: Format::R8G8B8A8_SRGB,
-                    extent,
-                    usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
-                    ..Default::default()
-                },
-                AllocationCreateInfo::default(),
-            ).unwrap();
-            uploader.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(upload_buffer, image.clone())).unwrap();
-            ImageView::new_default(image).unwrap()
-        };
-        let sampler = Sampler::new(
-            device.clone(),
-            SamplerCreateInfo {
-                mag_filter: Filter::Nearest,
-                min_filter: Filter::Linear,
-                address_mode: [SamplerAddressMode::ClampToEdge; 3],
-                ..Default::default()
-            },
-        ).unwrap();
         let descriptor_sets = uniform_buffers.create_new_attached(|buffer| {
             PersistentDescriptorSet::new(
                 ds_allocator,
                 pipeline.layout().set_layouts()[0].clone(),
-                [
-                    WriteDescriptorSet::buffer(0, buffer.clone()),
-                    WriteDescriptorSet::sampler(1, sampler.clone()),
-                    WriteDescriptorSet::image_view(2, texture.clone()),
-                ],
+                binding_maker(buffer),
                 [],
             ).unwrap()
         });

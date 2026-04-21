@@ -1,7 +1,7 @@
 use crate::client::camera::Camera;
 use crate::client::engine::GraphicsEngine;
 use crate::client::input::Input;
-use crate::client::vertex::{Vertex, VertexFormat, VertexPosTex};
+use crate::client::vertex::{Vertex, VertexFormat, VertexPosCol, VertexPosTex};
 use crate::math::mat4::Mat4;
 use crate::util::timer::{FrameRateLimit, Timer};
 use log::info;
@@ -21,7 +21,7 @@ enum Game {
 }
 
 struct GameData {
-    graphics: GraphicsEngine<VertexPosTex>,
+    graphics: GraphicsEngine,
     input: Input,
     camera: Camera,
     timer: Timer,
@@ -32,14 +32,14 @@ impl ApplicationHandler for Game {
         match cause {
             StartCause::Init => {
                 info!("Init");
-                // let v1 = Vertex::new().pos(0.5, 0.5, -1.0).color(1.0, 0.0, 0.0);
-                // let v2 = Vertex::new().pos(0.5, 0.0, -1.0).color(0.0, 1.0, 0.0);
-                // let v3 = Vertex::new().pos(0.0, 0.5, -1.0).color(0.0, 0.0, 1.0);
-                let v1 = Vertex::new().pos(0.5, 0.5, -1.0).uv(1.0, 0.0);
-                let v2 = Vertex::new().pos(0.5, 0.0, -1.0).uv(1.0, 1.0);
-                let v3 = Vertex::new().pos(0.0, 0.5, -1.0).uv(0.0, 0.0);
+                let vc1 = Vertex::new().pos(0.5, 0.5, -1.0).color(1.0, 0.0, 0.0);
+                let vc2 = Vertex::new().pos(0.5, 0.0, -1.0).color(0.0, 1.0, 0.0);
+                let vc3 = Vertex::new().pos(0.0, 0.5, -1.0).color(0.0, 0.0, 1.0);
+                let vt1 = Vertex::new().pos(0.5, 0.5, 1.0).uv(1.0, 0.0);
+                let vt2 = Vertex::new().pos(0.5, 0.0, 1.0).uv(1.0, 1.0);
+                let vt3 = Vertex::new().pos(0.0, 0.5, 1.0).uv(0.0, 0.0);
                 *self = Game::Init(GameData {
-                    graphics: GraphicsEngine::new(&event_loop, vec![v1, v3, v2]),
+                    graphics: GraphicsEngine::new(&event_loop, vec![vc1, vc3, vc2], vec![vt1, vt3, vt2]),
                     input: Input::new(),
                     camera: Camera::new(),
                     timer: Timer::new(NonZero::new(20).unwrap(), FrameRateLimit::Unlimited),
@@ -115,7 +115,10 @@ impl ApplicationHandler for Game {
                         data.camera.adjust(engine.get_window().inner_size(), partial_tick);
                         engine.update_fps();
                         engine.resize_or_update_swapchain();
-                        engine.swap_buffers(VertexPosTex::new_uniform((Mat4::IDENTITY, data.camera.get_view(), data.camera.get_proj())));
+                        engine.swap_buffers(
+                            VertexPosTex::new_uniform((Mat4::IDENTITY, data.camera.get_view(), data.camera.get_proj())),
+                            VertexPosCol::new_uniform((Mat4::IDENTITY, data.camera.get_view(), data.camera.get_proj())),
+                        );
                     });
                 }
             }

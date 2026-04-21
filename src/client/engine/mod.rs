@@ -3,18 +3,23 @@ mod pipeline;
 
 use crate::client::engine::pipeline::{Pipeline, PipelineConsumer};
 use crate::client::engine::swapchain::SwapChain;
-use crate::client::vertex::VertexFormat;
+use crate::client::vertex::{VertexFormat, VertexPosCol, VertexPosTex};
 use log::{error, info};
 use std::sync::Arc;
 use std::time::Instant;
+use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBufferAbstract, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo, PrimaryCommandBufferAbstract, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents};
 use vulkano::descriptor_set::allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo};
+use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo, QueueFlags};
 use vulkano::format::Format;
+use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo};
+use vulkano::image::view::ImageView;
+use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo};
-use vulkano::memory::allocator::StandardMemoryAllocator;
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator};
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::render_pass::RenderPass;
 use vulkano::swapchain::Surface;
@@ -24,14 +29,15 @@ use winit::dpi::{LogicalPosition, Position};
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{CursorGrabMode, Window, WindowAttributes};
 
-pub struct GraphicsEngine<V: VertexFormat> {
+pub struct GraphicsEngine {
     window: Arc<Window>,
     device: Arc<Device>,
     queue: Arc<Queue>,
     memory_allocator: Arc<StandardMemoryAllocator>,
     cb_allocator: StandardCommandBufferAllocator,
     render_pass: Arc<RenderPass>,
-    pipeline: Pipeline<V>,
+    tex_pipeline: Pipeline<VertexPosTex>,
+    col_pipeline: Pipeline<VertexPosCol>,
     swapchain: SwapChain,
     viewport: Viewport,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
@@ -43,8 +49,8 @@ pub struct GraphicsEngine<V: VertexFormat> {
     mouse_grabbed: bool,
 }
 
-impl<V: VertexFormat> GraphicsEngine<V> {
-    pub fn new(event_loop: &ActiveEventLoop, vertices: Vec<V>) -> Self {
+impl GraphicsEngine {
+    pub fn new(event_loop: &ActiveEventLoop, col_vertices: Vec<VertexPosCol>, tex_vertices: Vec<VertexPosTex>) -> Self {
         let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
         let window = Arc::new(event_loop.create_window(WindowAttributes::default().with_title("Evolution VK")).unwrap());
         let required_extensions = Surface::required_extensions(&window);
@@ -90,7 +96,56 @@ impl<V: VertexFormat> GraphicsEngine<V> {
             CommandBufferUsage::OneTimeSubmit,
         ).unwrap();
         let ds_allocator = Arc::new(StandardDescriptorSetAllocator::new(device.clone(), StandardDescriptorSetAllocatorCreateInfo::default()));
-        let pipeline = Pipeline::new(vertices, memory_allocator.clone(), &ds_allocator, render_pass.clone(), &swapchain, &mut uploader);
+        let tex_pipeline = {
+            let texture = {
+                let image = image::open("res/assets/textures/test_r_g.png").unwrap().to_rgba8();
+                let extent = [image.width(), image.height(), 1];
+                let upload_buffer = Buffer::from_iter(
+                    memory_allocator.clone(),
+                    BufferCreateInfo {
+                        usage: BufferUsage::TRANSFER_SRC,
+                        ..Default::default()
+                    },
+                    AllocationCreateInfo {
+                        memory_type_filter: MemoryTypeFilter::PREFER_HOST | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                        ..Default::default()
+                    },
+                    image.into_iter().cloned(),
+                ).unwrap();
+                let image = Image::new(
+                    memory_allocator.clone(),
+                    ImageCreateInfo {
+                        image_type: ImageType::Dim2d,
+                        format: Format::R8G8B8A8_SRGB,
+                        extent,
+                        usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+                        ..Default::default()
+                    },
+                    AllocationCreateInfo::default(),
+                ).unwrap();
+                uploader.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(upload_buffer, image.clone())).unwrap();
+                ImageView::new_default(image).unwrap()
+            };
+            let sampler = Sampler::new(
+                device.clone(),
+                SamplerCreateInfo {
+                    mag_filter: Filter::Nearest,
+                    min_filter: Filter::Linear,
+                    address_mode: [SamplerAddressMode::ClampToEdge; 3],
+                    ..Default::default()
+                },
+            ).unwrap();
+            Pipeline::new(tex_vertices, memory_allocator.clone(), &ds_allocator, render_pass.clone(), &swapchain, |buffer| {
+                [
+                    WriteDescriptorSet::buffer(0, buffer.clone()),
+                    WriteDescriptorSet::sampler(1, sampler.clone()),
+                    WriteDescriptorSet::image_view(2, texture.clone()),
+                ]
+            })
+        };
+        let col_pipeline = Pipeline::new(col_vertices, memory_allocator.clone(), &ds_allocator, render_pass.clone(), &swapchain, |buffer| {
+            [WriteDescriptorSet::buffer(0, buffer.clone())]
+        });
         let viewport = Viewport {
             offset: [0.0, window_size.height as f32],
             extent: [window_size.width as f32, -(window_size.height as f32)],
@@ -103,7 +158,8 @@ impl<V: VertexFormat> GraphicsEngine<V> {
             memory_allocator,
             cb_allocator,
             swapchain,
-            pipeline,
+            tex_pipeline,
+            col_pipeline,
             render_pass,
             viewport,
             previous_frame_end: Some(uploader.build().unwrap().execute(queue).unwrap().boxed()),
@@ -235,7 +291,7 @@ impl<V: VertexFormat> GraphicsEngine<V> {
         }
     }
 
-    pub fn swap_buffers(&mut self, t: V::Uniform) {
+    pub fn swap_buffers(&mut self, tex_uniform: <VertexPosTex as VertexFormat>::Uniform, col_uniform: <VertexPosCol as VertexFormat>::Uniform) {
         self.swapchain.swap_buffers(|swapchain, acquire_future, framebuffer, present_info| {
             let mut builder = AutoCommandBufferBuilder::primary(&self.cb_allocator, self.queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
             builder
@@ -254,14 +310,17 @@ impl<V: VertexFormat> GraphicsEngine<V> {
                 ).unwrap()
                 .set_viewport(0, [self.viewport.clone()].into_iter().collect())
                 .unwrap()
-                .render(&self.pipeline, swapchain)
+                .render(&self.tex_pipeline, swapchain)
+                .unwrap()
+                .render(&self.col_pipeline, swapchain)
                 .unwrap()
                 .end_render_pass(Default::default())
                 .unwrap();
             let command_buffer = builder.build().unwrap();
             acquire_future.wait(None).unwrap();
             self.previous_frame_end.as_mut().unwrap().cleanup_finished();
-            self.pipeline.write_uniform(t, swapchain);
+            self.tex_pipeline.write_uniform(tex_uniform, swapchain);
+            self.col_pipeline.write_uniform(col_uniform, swapchain);
             let future = self.previous_frame_end
                              .take()
                              .unwrap()
