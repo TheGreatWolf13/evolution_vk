@@ -1,7 +1,7 @@
 use crate::client::camera::Camera;
-use crate::client::engine;
 use crate::client::engine::GraphicsEngine;
 use crate::client::input::Input;
+use crate::client::vertex::{VPTUniformTransform, Vertex, VertexPosTex};
 use crate::math::mat4::Mat4;
 use crate::util::timer::{FrameRateLimit, Timer};
 use log::info;
@@ -21,7 +21,7 @@ enum Game {
 }
 
 struct GameData {
-    graphics: GraphicsEngine<engine::vs::Data>,
+    graphics: GraphicsEngine<VPTUniformTransform, VertexPosTex>,
     input: Input,
     camera: Camera,
     timer: Timer,
@@ -32,8 +32,14 @@ impl ApplicationHandler for Game {
         match cause {
             StartCause::Init => {
                 info!("Init");
+                // let v1 = Vertex::new().pos(0.5, 0.5, -1.0).color(1.0, 0.0, 0.0);
+                // let v2 = Vertex::new().pos(0.5, 0.0, -1.0).color(0.0, 1.0, 0.0);
+                // let v3 = Vertex::new().pos(0.0, 0.5, -1.0).color(0.0, 0.0, 1.0);
+                let v1 = Vertex::new().pos(0.5, 0.5, -1.0).uv(1.0, 0.0);
+                let v2 = Vertex::new().pos(0.5, 0.0, -1.0).uv(1.0, 1.0);
+                let v3 = Vertex::new().pos(0.0, 0.5, -1.0).uv(0.0, 0.0);
                 *self = Game::Init(GameData {
-                    graphics: GraphicsEngine::new(&event_loop),
+                    graphics: GraphicsEngine::new(&event_loop, vec![v1, v2, v3]),
                     input: Input::new(),
                     camera: Camera::new(),
                     timer: Timer::new(NonZero::new(20).unwrap(), FrameRateLimit::Unlimited),
@@ -109,11 +115,7 @@ impl ApplicationHandler for Game {
                         data.camera.adjust(engine.get_window().inner_size(), partial_tick);
                         engine.update_fps();
                         engine.update_swapchain();
-                        engine.swap_buffers(engine::vs::Data {
-                            world: Mat4::IDENTITY.into(),
-                            view: data.camera.get_view().into(),
-                            proj: data.camera.get_proj().into(),
-                        })
+                        engine.swap_buffers(VertexPosTex::new_uniform(Mat4::IDENTITY, data.camera.get_view(), data.camera.get_proj()));
                     });
                 }
             }

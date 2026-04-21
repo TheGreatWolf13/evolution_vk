@@ -1,26 +1,27 @@
-﻿use crate::client::vertex::VertexPosCol;
+﻿use crate::client::vertex::VertexFormat;
 use log::{error, info};
 use smallvec::smallvec;
 use std::sync::Arc;
 use std::time::Instant;
 use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo, PrimaryCommandBufferAbstract, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents};
 use vulkano::descriptor_set::allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo};
 use vulkano::descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet};
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, DeviceOwned, Queue, QueueCreateInfo, QueueFlags};
 use vulkano::format::Format;
+use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo};
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator};
-use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
+use vulkano::pipeline::graphics::color_blend::{AttachmentBlend, ColorBlendAttachmentState, ColorBlendState};
 use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
-use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
+use vulkano::pipeline::graphics::vertex_input::VertexDefinition;
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
@@ -34,49 +35,7 @@ use winit::dpi::{LogicalPosition, PhysicalSize, Position};
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{CursorGrabMode, Window, WindowAttributes};
 
-pub mod vs {
-    vulkano_shaders::shader! {
-        ty: "vertex",
-        src: r"
-            #version 460
-
-            layout(location = 0) in vec3 position;
-            layout(location = 1) in vec3 color;
-
-            layout(location = 0) out vec3 v_color;
-
-            layout(set = 0, binding = 0) uniform Data {
-                mat4 world;
-                mat4 view;
-                mat4 proj;
-            } uniforms;
-
-            void main() {
-                gl_Position = uniforms.proj * uniforms.view * uniforms.world * vec4(position, 1.0);
-                v_color = color;
-            }
-        ",
-    }
-}
-
-mod fs {
-    vulkano_shaders::shader! {
-        ty: "fragment",
-        src: r"
-            #version 460
-
-            layout(location = 0) in vec3 color;
-
-            layout(location = 0) out vec4 f_color;
-
-            void main() {
-                f_color = vec4(color, 1.0);
-            }
-        ",
-    }
-}
-
-pub struct GraphicsEngine<T: BufferContents> {
+pub struct GraphicsEngine<T: BufferContents, V: VertexFormat> {
     window: Arc<Window>,
     device: Arc<Device>,
     queue: Arc<Queue>,
@@ -84,7 +43,7 @@ pub struct GraphicsEngine<T: BufferContents> {
     command_buffer_allocator: StandardCommandBufferAllocator,
     pipeline: Arc<GraphicsPipeline>,
     render_pass: Arc<RenderPass>,
-    vertex_buffer: Subbuffer<[VertexPosCol]>,
+    vertex_buffer: Subbuffer<[V]>,
     vs: Arc<ShaderModule>,
     fs: Arc<ShaderModule>,
     swap_mechanism: SwapMechanism<T>,
@@ -138,8 +97,8 @@ impl<T: BufferContents> SwapMechanism<T> {
     }
 }
 
-impl<T: BufferContents> GraphicsEngine<T> {
-    pub fn new(event_loop: &ActiveEventLoop) -> Self {
+impl<T: BufferContents, V: VertexFormat> GraphicsEngine<T, V> {
+    pub fn new(event_loop: &ActiveEventLoop, vertices: Vec<V>) -> Self {
         let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
         let window = Arc::new(event_loop.create_window(WindowAttributes::default().with_title("Evolution VK")).unwrap());
         let required_extensions = Surface::required_extensions(&window);
@@ -190,9 +149,6 @@ impl<T: BufferContents> GraphicsEngine<T> {
         };
         let render_pass = Self::get_render_pass(device.clone(), swapchain.clone());
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-        let v1 = crate::client::vertex::Vertex::new().pos(0.5, 0.5, -1.0).color(1.0, 0.0, 0.0);
-        let v2 = crate::client::vertex::Vertex::new().pos(0.5, 0.0, -1.0).color(0.0, 1.0, 0.0);
-        let v3 = crate::client::vertex::Vertex::new().pos(0.0, 0.5, -1.0).color(0.0, 0.0, 1.0);
         let vertex_buffer = Buffer::from_iter(
             memory_allocator.clone(),
             BufferCreateInfo {
@@ -203,11 +159,10 @@ impl<T: BufferContents> GraphicsEngine<T> {
                 memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            vec![v1, v2, v3],
+            vertices,
         ).unwrap();
-        let vs = vs::load(device.clone()).expect("failed to create shader module");
-        let fs = fs::load(device.clone()).expect("failed to create shader module");
-        let (framebuffers, pipeline) = GraphicsEngine::<T>::get_framebuffers_and_pipeline(window.inner_size(), &images, render_pass.clone(), memory_allocator.clone(), vs.entry_point("main").unwrap(), fs.entry_point("main").unwrap());
+        let (vs, fs) = V::load_shaders(device.clone());
+        let (framebuffers, pipeline) = GraphicsEngine::<T, V>::get_framebuffers_and_pipeline(window.inner_size(), &images, render_pass.clone(), memory_allocator.clone(), vs.entry_point("main").unwrap(), fs.entry_point("main").unwrap());
         let uniform_buffers = (0..swapchain.image_count()).map(|_| {
             Buffer::new_sized::<T>(memory_allocator.clone(), BufferCreateInfo {
                 usage: BufferUsage::UNIFORM_BUFFER,
@@ -218,33 +173,81 @@ impl<T: BufferContents> GraphicsEngine<T> {
             }).unwrap()
         }).collect::<Vec<_>>();
         let command_buffer_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
+        let mut uploads = AutoCommandBufferBuilder::primary(
+            &command_buffer_allocator,
+            queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        ).unwrap();
         let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(device.clone(), StandardDescriptorSetAllocatorCreateInfo::default()));
-        let uniform_buffer_sets = uniform_buffers.iter().map(|buffer| {
+        let texture = {
+            let image = image::open("res/assets/textures/test_r_g.png").unwrap().to_rgba8();
+            let extent = [image.width(), image.height(), 1];
+            let upload_buffer = Buffer::from_iter(
+                memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::TRANSFER_SRC,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                image.into_iter().cloned(),
+            ).unwrap();
+            let image = Image::new(
+                memory_allocator.clone(),
+                ImageCreateInfo {
+                    image_type: ImageType::Dim2d,
+                    format: Format::R8G8B8A8_SRGB,
+                    extent,
+                    usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+                    ..Default::default()
+                },
+                AllocationCreateInfo::default(),
+            ).unwrap();
+            uploads.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(upload_buffer, image.clone())).unwrap();
+            ImageView::new_default(image).unwrap()
+        };
+        let sampler = Sampler::new(
+            device.clone(),
+            SamplerCreateInfo {
+                mag_filter: Filter::Nearest,
+                min_filter: Filter::Linear,
+                address_mode: [SamplerAddressMode::ClampToEdge; 3],
+                ..Default::default()
+            },
+        ).unwrap();
+        let descriptor_sets = uniform_buffers.iter().map(|buffer| {
             PersistentDescriptorSet::new(
                 &descriptor_set_allocator,
                 pipeline.layout().set_layouts()[0].clone(),
-                [WriteDescriptorSet::buffer(0, buffer.clone())],
+                [
+                    WriteDescriptorSet::buffer(0, buffer.clone()),
+                    WriteDescriptorSet::sampler(1, sampler.clone()),
+                    WriteDescriptorSet::image_view(2, texture.clone()),
+                ],
                 [],
             ).unwrap()
         }).collect::<Vec<_>>();
+
         Self {
             window,
             device: device.clone(),
-            queue,
+            queue: queue.clone(),
             memory_allocator,
             command_buffer_allocator,
             swap_mechanism: SwapMechanism {
                 framebuffers,
                 swapchain,
                 uniform_buffers,
-                uniform_buffer_sets,
+                uniform_buffer_sets: descriptor_sets,
             },
             pipeline,
             render_pass,
             vertex_buffer,
             vs,
             fs,
-            previous_frame_end: Some(Box::new(sync::now(device)) as Box<dyn GpuFuture>),
+            previous_frame_end: Some(uploads.build().unwrap().execute(queue).unwrap().boxed()),
             window_resized: false,
             recreate_swapchain: false,
             last_frame: Instant::now(),
@@ -383,7 +386,7 @@ impl<T: BufferContents> GraphicsEngine<T> {
             }).unwrap()
         }).collect();
         let pipeline = {
-            let vertex_input_state = [VertexPosCol::per_vertex()].definition(&vs.info().input_interface).unwrap();
+            let vertex_input_state = [V::per_vertex()].definition(&vs.info().input_interface).unwrap();
             let stages = [
                 PipelineShaderStageCreateInfo::new(vs),
                 PipelineShaderStageCreateInfo::new(fs),
@@ -413,7 +416,10 @@ impl<T: BufferContents> GraphicsEngine<T> {
                     multisample_state: Some(MultisampleState::default()),
                     color_blend_state: Some(ColorBlendState::with_attachment_states(
                         subpass.num_color_attachments(),
-                        ColorBlendAttachmentState::default(),
+                        ColorBlendAttachmentState {
+                            blend: Some(AttachmentBlend::alpha()),
+                            ..Default::default()
+                        },
                     )),
                     subpass: Some(subpass.into()),
                     ..GraphicsPipelineCreateInfo::layout(layout)
@@ -436,7 +442,7 @@ impl<T: BufferContents> GraphicsEngine<T> {
     }
 }
 
-impl<T: BufferContents + Copy> GraphicsEngine<T> {
+impl<T: BufferContents + Copy, V: VertexFormat> GraphicsEngine<T, V> {
     pub fn swap_buffers(&mut self, t: T) {
         self.swap_mechanism.swap_buffers(|| self.recreate_swapchain = true, |acquire_future, framebuffer, uniform_buffer, descriptor_set, present_info, mut if_suboptimal| {
             let mut builder = AutoCommandBufferBuilder::primary(&self.command_buffer_allocator, self.queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
