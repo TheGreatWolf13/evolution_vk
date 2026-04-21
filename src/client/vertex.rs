@@ -1,11 +1,12 @@
 ﻿use crate::math::mat4::Mat4;
+use std::fmt::Debug;
 use std::sync::Arc;
 use vulkano::buffer::BufferContents;
 use vulkano::device::Device;
 use vulkano::pipeline::graphics::vertex_input::Vertex as VertexLayout;
 use vulkano::shader::ShaderModule;
 
-pub trait VertexFormat: BufferContents + VertexLayout + Copy {
+pub trait VertexFormat: BufferContents + VertexLayout + Copy + Debug {
     type UniformInput;
     type Uniform: BufferContents + Copy;
 
@@ -14,17 +15,17 @@ pub trait VertexFormat: BufferContents + VertexLayout + Copy {
     fn new_uniform(input: Self::UniformInput) -> Self::Uniform;
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Vertex;
 
-#[derive(BufferContents, VertexLayout, Copy, Clone)]
+#[derive(BufferContents, VertexLayout, Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VertexPos {
     #[format(R32G32B32_SFLOAT)]
     position: [f32; 3],
 }
 
-#[derive(BufferContents, VertexLayout, Copy, Clone)]
+#[derive(BufferContents, VertexLayout, Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VertexPosCol {
     #[format(R32G32B32_SFLOAT)]
@@ -33,7 +34,7 @@ pub struct VertexPosCol {
     color: [f32; 3],
 }
 
-#[derive(BufferContents, VertexLayout, Copy, Clone)]
+#[derive(BufferContents, VertexLayout, Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VertexPosTex {
     #[format(R32G32B32_SFLOAT)]
