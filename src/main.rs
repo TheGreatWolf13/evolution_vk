@@ -39,7 +39,7 @@ impl ApplicationHandler for Game {
                 let v2 = Vertex::new().pos(0.5, 0.0, -1.0).uv(1.0, 1.0);
                 let v3 = Vertex::new().pos(0.0, 0.5, -1.0).uv(0.0, 0.0);
                 *self = Game::Init(GameData {
-                    graphics: GraphicsEngine::new(&event_loop, vec![v1, v2, v3]),
+                    graphics: GraphicsEngine::new(&event_loop, vec![v1, v3, v2]),
                     input: Input::new(),
                     camera: Camera::new(),
                     timer: Timer::new(NonZero::new(20).unwrap(), FrameRateLimit::Unlimited),
