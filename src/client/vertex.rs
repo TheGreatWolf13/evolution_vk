@@ -6,7 +6,12 @@ use vulkano::pipeline::graphics::vertex_input::Vertex as VertexLayout;
 use vulkano::shader::ShaderModule;
 
 pub trait VertexFormat: BufferContents + VertexLayout + Copy {
+    type UniformInput;
+    type Uniform: BufferContents + Copy;
+
     fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>);
+
+    fn new_uniform(input: Self::UniformInput) -> Self::Uniform;
 }
 
 #[derive(Copy, Clone)]
@@ -71,22 +76,21 @@ impl VertexPos {
 
 //Position
 //Colour
-
-pub type VPCUniformData = vpc_vs::Data;
-
-impl VertexPosCol {
-    pub fn new_uniform(world: Mat4, view: Mat4, proj: Mat4) -> VPCUniformData {
-        VPCUniformData {
-            world: world.into(),
-            view: view.into(),
-            proj: proj.into(),
-        }
-    }
-}
-
 impl VertexFormat for VertexPosCol {
+    type UniformInput = (Mat4, Mat4, Mat4);
+    type Uniform = vpc_vs::Transform;
+
     fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>) {
         (vpc_vs::load(device.clone()).unwrap(), vpc_fs::load(device).unwrap())
+    }
+
+    //noinspection DuplicatedCode
+    fn new_uniform(input: Self::UniformInput) -> Self::Uniform {
+        Self::Uniform {
+            world: input.0.into(),
+            view: input.1.into(),
+            proj: input.2.into(),
+        }
     }
 }
 
@@ -101,7 +105,7 @@ mod vpc_vs {
 
             layout(location = 0) out vec3 v_color;
 
-            layout(set = 0, binding = 0) uniform Data {
+            layout(set = 0, binding = 0) uniform Transform {
                 mat4 world;
                 mat4 view;
                 mat4 proj;
@@ -135,21 +139,21 @@ mod vpc_fs {
 //Position
 //Texture
 
-pub type VPTUniformTransform = vpt_vs::Transform;
-
-impl VertexPosTex {
-    pub fn new_uniform(world: Mat4, view: Mat4, proj: Mat4) -> VPTUniformTransform {
-        VPTUniformTransform {
-            world: world.into(),
-            view: view.into(),
-            proj: proj.into(),
-        }
-    }
-}
-
 impl VertexFormat for VertexPosTex {
+    type UniformInput = (Mat4, Mat4, Mat4);
+    type Uniform = vpt_vs::Transform;
+
     fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>) {
         (vpt_vs::load(device.clone()).unwrap(), vpt_fs::load(device).unwrap())
+    }
+
+    //noinspection DuplicatedCode
+    fn new_uniform(input: Self::UniformInput) -> Self::Uniform {
+        Self::Uniform {
+            world: input.0.into(),
+            view: input.1.into(),
+            proj: input.2.into(),
+        }
     }
 }
 

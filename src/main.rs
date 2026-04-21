@@ -1,7 +1,7 @@
 use crate::client::camera::Camera;
 use crate::client::engine::GraphicsEngine;
 use crate::client::input::Input;
-use crate::client::vertex::{VPTUniformTransform, Vertex, VertexPosTex};
+use crate::client::vertex::{Vertex, VertexFormat, VertexPosTex};
 use crate::math::mat4::Mat4;
 use crate::util::timer::{FrameRateLimit, Timer};
 use log::info;
@@ -21,7 +21,7 @@ enum Game {
 }
 
 struct GameData {
-    graphics: GraphicsEngine<VPTUniformTransform, VertexPosTex>,
+    graphics: GraphicsEngine<VertexPosTex>,
     input: Input,
     camera: Camera,
     timer: Timer,
@@ -114,8 +114,8 @@ impl ApplicationHandler for Game {
                         let engine = &mut data.graphics;
                         data.camera.adjust(engine.get_window().inner_size(), partial_tick);
                         engine.update_fps();
-                        engine.update_swapchain();
-                        engine.swap_buffers(VertexPosTex::new_uniform(Mat4::IDENTITY, data.camera.get_view(), data.camera.get_proj()));
+                        engine.resize_or_update_swapchain();
+                        engine.swap_buffers(VertexPosTex::new_uniform((Mat4::IDENTITY, data.camera.get_view(), data.camera.get_proj())));
                     });
                 }
             }

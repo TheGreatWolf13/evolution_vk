@@ -649,8 +649,8 @@ dependencies = [
  "log",
  "modular-bitfield",
  "paste",
- "smallvec",
  "spin_sleep",
+ "tuple-map",
  "vulkano",
  "vulkano-shaders",
  "winit",
@@ -2363,6 +2363,12 @@ name = "ttf-parser"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
+
+[[package]]
+name = "tuple-map"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23d5919d7121237af683b7fa982450597b1eaa2643e597aec3b519e4e5ab3d62"
 
 [[package]]
 name = "unicode-ident"
