@@ -124,6 +124,10 @@ impl<T: BufferContents, V: VertexFormat> GraphicsEngine<T, V> {
                     ..Default::default()
                 }],
                 enabled_extensions: device_extensions,
+                enabled_features: Features {
+                    fill_mode_non_solid: true,
+                    ..Features::empty()
+                },
                 ..Default::default()
             },
         ).expect("failed to create device");
