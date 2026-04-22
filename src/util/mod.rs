@@ -2,6 +2,7 @@
 
 pub mod error;
 pub mod timer;
+mod random;
 
 pub type Result<T = ()> = core::result::Result<T, Throwable>;
 

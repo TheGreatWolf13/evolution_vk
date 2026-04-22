@@ -1,4 +1,5 @@
 ﻿use crate::client::engine::swapchain::{FrameVec, SwapChain};
+use crate::client::mesh::Mesh;
 use crate::client::vertex::VertexFormat;
 use std::sync::Arc;
 use tuple_map::TupleMap2;
@@ -21,30 +22,30 @@ use vulkano::pipeline::{DynamicState, GraphicsPipeline, Pipeline as P, PipelineB
 use vulkano::render_pass::{RenderPass, Subpass};
 use vulkano::ValidationError;
 
-pub(super) struct Pipeline<V: VertexFormat> {
+pub struct Pipeline<V: VertexFormat> {
     pipeline: Arc<GraphicsPipeline>,
     uniform_buffers: FrameVec<Subbuffer<V::Uniform>>,
     descriptor_sets: FrameVec<Arc<PersistentDescriptorSet>>,
-    vertex_buffer: Subbuffer<[V]>, //Depends on the object
 }
 
 pub trait PipelineConsumer {
-    fn render<V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, swapchain: &SwapChain) -> Result<&mut Self, Box<ValidationError>>;
+    fn render<V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, swapchain: &SwapChain, meshes: &Vec<Mesh<V>>) -> Result<&mut Self, Box<ValidationError>>;
 }
 
 impl PipelineConsumer for AutoCommandBufferBuilder<PrimaryAutoCommandBuffer> {
-    fn render<V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, swapchain: &SwapChain) -> Result<&mut Self, Box<ValidationError>> {
+    fn render<V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, swapchain: &SwapChain, meshes: &Vec<Mesh<V>>) -> Result<&mut Self, Box<ValidationError>> {
         self
             .bind_pipeline_graphics(pipeline.pipeline.clone())?
-            .bind_descriptor_sets(PipelineBindPoint::Graphics, pipeline.pipeline.layout().clone(), 0, pipeline.descriptor_sets.get(&swapchain).clone())?
-            .bind_vertex_buffers(0, pipeline.vertex_buffer.clone())?
-            .draw(pipeline.vertex_buffer.len() as u32, 1, 0, 0)?;
+            .bind_descriptor_sets(PipelineBindPoint::Graphics, pipeline.pipeline.layout().clone(), 0, pipeline.descriptor_sets.get(&swapchain).clone())?;
+        for mesh in meshes {
+            mesh.draw(self, pipeline.pipeline.layout().clone())?;
+        }
         Ok(self)
     }
 }
 
 impl<V: VertexFormat> Pipeline<V> {
-    pub fn new<R: IntoIterator<Item = WriteDescriptorSet>>(vertices: Vec<V>, allocator: Arc<StandardMemoryAllocator>, ds_allocator: &Arc<StandardDescriptorSetAllocator>, render_pass: Arc<RenderPass>, swapchain: &SwapChain, mut binding_maker: impl FnMut(&Subbuffer<V::Uniform>) -> R) -> Pipeline<V> {
+    pub fn new<R: IntoIterator<Item = WriteDescriptorSet>>(allocator: Arc<StandardMemoryAllocator>, ds_allocator: &Arc<StandardDescriptorSetAllocator>, render_pass: Arc<RenderPass>, swapchain: &SwapChain, mut binding_maker: impl FnMut(&Subbuffer<V::Uniform>) -> R) -> Pipeline<V> {
         let device = allocator.device().clone();
         let (vs, fs) = V::load_shaders(device.clone());
         let (vs_entry, fs_entry) = (vs, fs).map(|s| s.entry_point("main").unwrap());
@@ -104,23 +105,10 @@ impl<V: VertexFormat> Pipeline<V> {
                 [],
             ).unwrap()
         });
-        let vertex_buffer = Buffer::from_iter(
-            allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::VERTEX_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            vertices,
-        ).unwrap();
         Self {
             uniform_buffers,
             descriptor_sets,
             pipeline,
-            vertex_buffer,
         }
     }
 

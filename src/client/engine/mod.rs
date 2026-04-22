@@ -3,6 +3,7 @@ mod pipeline;
 
 use crate::client::engine::pipeline::{Pipeline, PipelineConsumer};
 use crate::client::engine::swapchain::SwapChain;
+use crate::client::mesh::Mesh;
 use crate::client::vertex::{VertexFormat, VertexPosCol, VertexPosTex};
 use log::{error, info};
 use std::sync::Arc;
@@ -50,7 +51,7 @@ pub struct GraphicsEngine {
 }
 
 impl GraphicsEngine {
-    pub fn new(event_loop: &ActiveEventLoop, col_vertices: Vec<VertexPosCol>, tex_vertices: Vec<VertexPosTex>) -> Self {
+    pub fn new(event_loop: &ActiveEventLoop) -> Self {
         let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
         let window = Arc::new(event_loop.create_window(WindowAttributes::default().with_title("Evolution VK")).unwrap());
         let required_extensions = Surface::required_extensions(&window);
@@ -98,7 +99,7 @@ impl GraphicsEngine {
         let ds_allocator = Arc::new(StandardDescriptorSetAllocator::new(device.clone(), StandardDescriptorSetAllocatorCreateInfo::default()));
         let tex_pipeline = {
             let texture = {
-                let image = image::open("res/assets/textures/test_r_g.png").unwrap().to_rgba8();
+                let image = image::open("res/assets/textures/cobblestone.png").unwrap().to_rgba8();
                 let extent = [image.width(), image.height(), 1];
                 let upload_buffer = Buffer::from_iter(
                     memory_allocator.clone(),
@@ -135,7 +136,7 @@ impl GraphicsEngine {
                     ..Default::default()
                 },
             ).unwrap();
-            Pipeline::new(tex_vertices, memory_allocator.clone(), &ds_allocator, render_pass.clone(), &swapchain, |buffer| {
+            Pipeline::new(memory_allocator.clone(), &ds_allocator, render_pass.clone(), &swapchain, |buffer| {
                 [
                     WriteDescriptorSet::buffer(0, buffer.clone()),
                     WriteDescriptorSet::sampler(1, sampler.clone()),
@@ -143,7 +144,7 @@ impl GraphicsEngine {
                 ]
             })
         };
-        let col_pipeline = Pipeline::new(col_vertices, memory_allocator.clone(), &ds_allocator, render_pass.clone(), &swapchain, |buffer| {
+        let col_pipeline = Pipeline::new(memory_allocator.clone(), &ds_allocator, render_pass.clone(), &swapchain, |buffer| {
             [WriteDescriptorSet::buffer(0, buffer.clone())]
         });
         let viewport = Viewport {
@@ -170,6 +171,10 @@ impl GraphicsEngine {
             mouse_grabbed: false,
             window_focused: true,
         }
+    }
+
+    pub fn get_allocator(&self) -> &Arc<StandardMemoryAllocator> {
+        &self.memory_allocator
     }
 
     fn select_physical_device(instance: &Arc<Instance>, surface: &Arc<Surface>, device_extensions: &DeviceExtensions) -> (Arc<PhysicalDevice>, u32) {
@@ -291,7 +296,7 @@ impl GraphicsEngine {
         }
     }
 
-    pub fn swap_buffers(&mut self, tex_uniform: <VertexPosTex as VertexFormat>::Uniform, col_uniform: <VertexPosCol as VertexFormat>::Uniform) {
+    pub fn swap_buffers(&mut self, tex: (<VertexPosTex as VertexFormat>::Uniform, &Vec<Mesh<VertexPosTex>>), col: (<VertexPosCol as VertexFormat>::Uniform, &Vec<Mesh<VertexPosCol>>)) {
         self.swapchain.swap_buffers(|swapchain, acquire_future, framebuffer, present_info| {
             let mut builder = AutoCommandBufferBuilder::primary(&self.cb_allocator, self.queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
             builder
@@ -310,17 +315,17 @@ impl GraphicsEngine {
                 ).unwrap()
                 .set_viewport(0, [self.viewport.clone()].into_iter().collect())
                 .unwrap()
-                .render(&self.tex_pipeline, swapchain)
+                .render(&self.tex_pipeline, swapchain, tex.1)
                 .unwrap()
-                .render(&self.col_pipeline, swapchain)
+                .render(&self.col_pipeline, swapchain, col.1)
                 .unwrap()
                 .end_render_pass(Default::default())
                 .unwrap();
             let command_buffer = builder.build().unwrap();
             acquire_future.wait(None).unwrap();
             self.previous_frame_end.as_mut().unwrap().cleanup_finished();
-            self.tex_pipeline.write_uniform(tex_uniform, swapchain);
-            self.col_pipeline.write_uniform(col_uniform, swapchain);
+            self.tex_pipeline.write_uniform(tex.0, swapchain);
+            self.col_pipeline.write_uniform(col.0, swapchain);
             let future = self.previous_frame_end
                              .take()
                              .unwrap()

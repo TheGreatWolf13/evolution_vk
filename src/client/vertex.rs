@@ -1,5 +1,4 @@
-﻿use crate::math::mat4::Mat4;
-use std::fmt::Debug;
+﻿use std::fmt::Debug;
 use std::sync::Arc;
 use vulkano::buffer::BufferContents;
 use vulkano::device::Device;
@@ -7,12 +6,12 @@ use vulkano::pipeline::graphics::vertex_input::Vertex as VertexLayout;
 use vulkano::shader::ShaderModule;
 
 pub trait VertexFormat: BufferContents + VertexLayout + Copy + Debug {
-    type UniformInput;
+    type PushConstantInput: Into<Self::PushConstant> + Copy;
+    type PushConstant: BufferContents + Copy;
+    type UniformInput: Into<Self::Uniform>;
     type Uniform: BufferContents + Copy;
 
     fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>);
-
-    fn new_uniform(input: Self::UniformInput) -> Self::Uniform;
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -22,14 +21,14 @@ pub struct Vertex;
 #[repr(C)]
 pub struct VertexPos {
     #[format(R32G32B32_SFLOAT)]
-    position: [f32; 3],
+    pos: [f32; 3],
 }
 
 #[derive(BufferContents, VertexLayout, Copy, Clone, Debug)]
 #[repr(C)]
 pub struct VertexPosCol {
     #[format(R32G32B32_SFLOAT)]
-    position: [f32; 3],
+    pos: [f32; 3],
     #[format(R32G32B32_SFLOAT)]
     color: [f32; 3],
 }
@@ -38,7 +37,7 @@ pub struct VertexPosCol {
 #[repr(C)]
 pub struct VertexPosTex {
     #[format(R32G32B32_SFLOAT)]
-    position: [f32; 3],
+    pos: [f32; 3],
     #[format(R32G32_SFLOAT)]
     uv: [f32; 2],
 }
@@ -52,7 +51,7 @@ impl Vertex {
 
     pub fn pos(self, x: f32, y: f32, z: f32) -> VertexPos {
         VertexPos {
-            position: [x, y, z]
+            pos: [x, y, z]
         }
     }
 }
@@ -62,66 +61,84 @@ impl Vertex {
 impl VertexPos {
     pub fn color(self, r: f32, g: f32, b: f32) -> VertexPosCol {
         VertexPosCol {
-            position: self.position,
+            pos: self.pos,
             color: [r, g, b],
         }
     }
 
     pub fn uv(self, u: f32, v: f32) -> VertexPosTex {
         VertexPosTex {
-            position: self.position,
+            pos: self.pos,
             uv: [u, v],
         }
     }
 }
 
-//Position
-//Colour
-impl VertexFormat for VertexPosCol {
-    type UniformInput = (Mat4, Mat4, Mat4);
-    type Uniform = vpc_vs::Transform;
+mod vpc {
+    use crate::client::vertex::{VertexFormat, VertexPosCol};
+    use crate::math::mat4::Mat4;
+    use std::sync::Arc;
+    use vulkano::device::Device;
+    use vulkano::shader::ShaderModule;
 
-    fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>) {
-        (vpc_vs::load(device.clone()).unwrap(), vpc_fs::load(device).unwrap())
-    }
+    impl VertexFormat for VertexPosCol {
+        type PushConstantInput = Mat4;
+        type PushConstant = vs::Transform;
+        type UniformInput = (Mat4, Mat4);
+        type Uniform = vs::Camera;
 
-    //noinspection DuplicatedCode
-    fn new_uniform(input: Self::UniformInput) -> Self::Uniform {
-        Self::Uniform {
-            world: input.0.into(),
-            view: input.1.into(),
-            proj: input.2.into(),
+        fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>) {
+            (vs::load(device.clone()).unwrap(), fs::load(device).unwrap())
         }
     }
-}
 
-mod vpc_vs {
-    vulkano_shaders::shader! {
+    impl Into<vs::Transform> for Mat4 {
+        fn into(self) -> vs::Transform {
+            vs::Transform {
+                world: self.into()
+            }
+        }
+    }
+
+    impl Into<vs::Camera> for (Mat4, Mat4) {
+        fn into(self) -> vs::Camera {
+            vs::Camera {
+                view: self.0.into(),
+                proj: self.1.into(),
+            }
+        }
+    }
+
+    mod vs {
+        vulkano_shaders::shader! {
         ty: "vertex",
         src: r"
             #version 460
 
-            layout(location = 0) in vec3 position;
+            layout(set = 0, binding = 0) uniform Camera {
+                mat4 view;
+                mat4 proj;
+            } camera;
+
+            layout(push_constant) uniform Transform {
+                mat4 world;
+            } transform;
+
+            layout(location = 0) in vec3 pos;
             layout(location = 1) in vec3 color;
 
             layout(location = 0) out vec3 v_color;
 
-            layout(set = 0, binding = 0) uniform Transform {
-                mat4 world;
-                mat4 view;
-                mat4 proj;
-            } uniforms;
-
             void main() {
-                gl_Position = uniforms.proj * uniforms.view * uniforms.world * vec4(position, 1.0);
+                gl_Position = camera.proj * camera.view * transform.world * vec4(pos, 1.0);
                 v_color = color;
             }
         ",
     }
-}
+    }
 
-mod vpc_fs {
-    vulkano_shaders::shader! {
+    mod fs {
+        vulkano_shaders::shader! {
         ty: "fragment",
         src: r"
             #version 460
@@ -135,56 +152,74 @@ mod vpc_fs {
             }
         ",
     }
+    }
 }
 
-//Position
-//Texture
+mod vpt {
+    use crate::client::vertex::{VertexFormat, VertexPosTex};
+    use crate::math::mat4::Mat4;
+    use std::sync::Arc;
+    use vulkano::device::Device;
+    use vulkano::shader::ShaderModule;
 
-impl VertexFormat for VertexPosTex {
-    type UniformInput = (Mat4, Mat4, Mat4);
-    type Uniform = vpt_vs::Transform;
+    impl VertexFormat for VertexPosTex {
+        type PushConstantInput = Mat4;
+        type PushConstant = vs::Transform;
+        type UniformInput = (Mat4, Mat4);
+        type Uniform = vs::Camera;
 
-    fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>) {
-        (vpt_vs::load(device.clone()).unwrap(), vpt_fs::load(device).unwrap())
-    }
-
-    //noinspection DuplicatedCode
-    fn new_uniform(input: Self::UniformInput) -> Self::Uniform {
-        Self::Uniform {
-            world: input.0.into(),
-            view: input.1.into(),
-            proj: input.2.into(),
+        fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>) {
+            (vs::load(device.clone()).unwrap(), fs::load(device).unwrap())
         }
     }
-}
 
-mod vpt_vs {
-    vulkano_shaders::shader! {
+    impl Into<vs::Transform> for Mat4 {
+        fn into(self) -> vs::Transform {
+            vs::Transform {
+                world: self.into(),
+            }
+        }
+    }
+
+    impl Into<vs::Camera> for (Mat4, Mat4) {
+        fn into(self) -> vs::Camera {
+            vs::Camera {
+                view: self.0.into(),
+                proj: self.1.into(),
+            }
+        }
+    }
+
+    mod vs {
+        vulkano_shaders::shader! {
         ty: "vertex",
         src: r"
             #version 460
 
-            layout(location = 0) in vec3 position;
+            layout(set = 0, binding = 0) uniform Camera {
+                mat4 view;
+                mat4 proj;
+            } camera;
+
+            layout(push_constant) uniform Transform {
+                mat4 world;
+            } transform;
+
+            layout(location = 0) in vec3 pos;
             layout(location = 1) in vec2 uv;
 
             layout(location = 0) out vec2 v_uv;
 
-            layout(set = 0, binding = 0) uniform Transform {
-                mat4 world;
-                mat4 view;
-                mat4 proj;
-            } uniforms;
-
             void main() {
-                gl_Position = uniforms.proj * uniforms.view * uniforms.world * vec4(position, 1.0);
+                gl_Position = camera.proj * camera.view * transform.world * vec4(pos, 1.0);
                 v_uv = uv;
             }
         ",
     }
-}
+    }
 
-mod vpt_fs {
-    vulkano_shaders::shader! {
+    mod fs {
+        vulkano_shaders::shader! {
         ty: "fragment",
         src: r"
             #version 460
@@ -200,5 +235,6 @@ mod vpt_fs {
                 f_color = texture(sampler2D(tex, s), uv);
             }
         ",
+    }
     }
 }
