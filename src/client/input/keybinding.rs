@@ -11,6 +11,7 @@ pub(super) enum BindingType {
     MoveUp,
     MoveDown,
     ToggleGrabMouse,
+    ToggleWireframe,
 }
 
 pub struct Keybinding {

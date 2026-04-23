@@ -130,7 +130,7 @@ impl ApplicationHandler for Game {
             WindowEvent::RedrawRequested => {
                 if let Game::Init(data) = self {
                     data.timer.try_tick(|| {
-                        data.input.tick(&mut data.camera, || data.graphics.toggle_grab_mouse());
+                        data.input.tick(&mut data.camera, &mut data.graphics);
                     });
                     data.timer.try_frame(|partial_tick| {
                         let engine = &mut data.graphics;

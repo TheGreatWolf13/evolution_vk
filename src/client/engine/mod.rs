@@ -3,6 +3,7 @@ mod pipeline;
 
 use crate::client::engine::pipeline::{Pipeline, PipelineConsumer};
 use crate::client::engine::swapchain::SwapChain;
+use crate::client::input::InputHandler;
 use crate::client::mesh::Mesh;
 use crate::client::vertex::{VertexFormat, VertexPosCol, VertexPosTex};
 use log::{error, info};
@@ -48,6 +49,7 @@ pub struct GraphicsEngine {
     window_resized: bool,
     window_focused: bool,
     mouse_grabbed: bool,
+    wireframe: bool,
 }
 
 impl GraphicsEngine {
@@ -170,6 +172,7 @@ impl GraphicsEngine {
             time: 0.0,
             mouse_grabbed: false,
             window_focused: true,
+            wireframe: false,
         }
     }
 
@@ -263,10 +266,6 @@ impl GraphicsEngine {
         self.last_frame = now;
     }
 
-    pub fn toggle_grab_mouse(&mut self) {
-        self.grab_mouse(!self.mouse_grabbed);
-    }
-
     pub fn grab_mouse(&mut self, grab: bool) {
         let size = self.window.inner_size();
         if grab {
@@ -348,5 +347,17 @@ impl GraphicsEngine {
                 }
             }
         });
+    }
+}
+
+impl InputHandler for GraphicsEngine {
+    fn toggle_grab_mouse(&mut self) {
+        self.grab_mouse(!self.mouse_grabbed);
+    }
+
+    fn toggle_wireframe(&mut self) {
+        self.wireframe = !self.wireframe;
+        self.col_pipeline.set_wireframe(self.wireframe);
+        self.tex_pipeline.set_wireframe(self.wireframe);
     }
 }

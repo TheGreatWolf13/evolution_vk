@@ -14,6 +14,12 @@ pub struct Input {
     rot: Vec2,
 }
 
+pub trait InputHandler {
+    fn toggle_grab_mouse(&mut self);
+
+    fn toggle_wireframe(&mut self);
+}
+
 impl Input {
     pub fn new() -> Self {
         Self {
@@ -25,12 +31,13 @@ impl Input {
                 BindingType::MoveUp => Keybinding::new(KeyCode::Space),
                 BindingType::MoveDown => Keybinding::new(KeyCode::ControlLeft),
                 BindingType::ToggleGrabMouse => Keybinding::new(KeyCode::AltLeft),
+                BindingType::ToggleWireframe => Keybinding::new(KeyCode::F6),
             },
             rot: Vec2::ZERO,
         }
     }
 
-    pub fn tick(&mut self, camera: &mut Camera, mut mouse_grabber: impl FnMut()) {
+    pub fn tick(&mut self, camera: &mut Camera, handler: &mut impl InputHandler) {
         const SPEED: f32 = 0.025;
         const SENSITIVITY: f32 = 0.25;
         let mut forward = if_else!(self.bindings[BindingType::MoveBackward].is_down_and_reset() => 1.0 ; 0.0);
@@ -47,7 +54,10 @@ impl Input {
         camera.rotate(Rot3Deg::new(AngleDeg::new(self.rot.x()), AngleDeg::new(self.rot.y()), AngleDeg::ZERO));
         self.rot = Vec2::ZERO;
         while self.bindings[BindingType::ToggleGrabMouse].consume_click() {
-            mouse_grabber();
+            handler.toggle_grab_mouse();
+        }
+        while self.bindings[BindingType::ToggleWireframe].consume_click() {
+            handler.toggle_wireframe();
         }
     }
 

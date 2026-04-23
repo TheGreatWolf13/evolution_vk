@@ -1,6 +1,7 @@
 ﻿use crate::client::engine::swapchain::{FrameVec, SwapChain};
 use crate::client::mesh::Mesh;
 use crate::client::vertex::VertexFormat;
+use crate::if_else;
 use std::sync::Arc;
 use tuple_map::TupleMap2;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
@@ -114,5 +115,49 @@ impl<V: VertexFormat> Pipeline<V> {
 
     pub fn write_uniform(&self, uniform: V::Uniform, swapchain: &SwapChain) {
         *self.uniform_buffers.get(swapchain).write().unwrap() = uniform;
+    }
+
+    pub fn set_wireframe(&mut self, wireframe: bool) {
+        let device = self.pipeline.device();
+        let vertex_input_state = self.pipeline.vertex_input_state().clone();
+        let layout = self.pipeline.layout();
+        let subpass = self.pipeline.subpass().clone();
+        let number_of_color_attachments = self.pipeline.color_blend_state().unwrap().attachments.len() as u32;
+        let (vs, fs) = V::load_shaders(device.clone());
+        let (vs_entry, fs_entry) = (vs, fs).map(|s| s.entry_point("main").unwrap());
+        let stages = [
+            PipelineShaderStageCreateInfo::new(vs_entry),
+            PipelineShaderStageCreateInfo::new(fs_entry),
+        ];
+        self.pipeline = GraphicsPipeline::new(
+            device.clone(),
+            None,
+            GraphicsPipelineCreateInfo {
+                stages: stages.into_iter().collect(),
+                vertex_input_state: Some(vertex_input_state),
+                input_assembly_state: Some(InputAssemblyState::default()),
+                viewport_state: Some(ViewportState::default()),
+                rasterization_state: Some(RasterizationState {
+                    polygon_mode: if_else!(wireframe => PolygonMode::Line ; PolygonMode::Fill),
+                    cull_mode: CullMode::Back,
+                    ..Default::default()
+                }),
+                depth_stencil_state: Some(DepthStencilState {
+                    depth: Some(DepthState::simple()),
+                    ..Default::default()
+                }),
+                multisample_state: Some(MultisampleState::default()),
+                color_blend_state: Some(ColorBlendState::with_attachment_states(
+                    number_of_color_attachments,
+                    ColorBlendAttachmentState {
+                        blend: Some(AttachmentBlend::alpha()),
+                        ..Default::default()
+                    },
+                )),
+                subpass: Some(subpass),
+                dynamic_state: [DynamicState::Viewport].into_iter().collect(),
+                ..GraphicsPipelineCreateInfo::layout(layout.clone())
+            },
+        ).unwrap();
     }
 }
