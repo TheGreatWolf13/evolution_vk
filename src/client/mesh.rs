@@ -61,6 +61,13 @@ impl<V: VertexFormat> MeshBuilder<V> {
         }
     }
 
+    pub fn merge(mut self, mesh: MeshBuilder<V>) -> Self {
+        let last_index = self.vertex_buffer.len() as u32;
+        self.index_buffer.extend(mesh.index_buffer.iter().map(|i| i + last_index));
+        self.vertex_buffer.extend(mesh.vertex_buffer.iter().map(|v| v.transform(mesh.transform, self.transform)));
+        self
+    }
+
     fn create_buffer<T: BufferContents>(usage: BufferUsage, content: Vec<T>, allocator: Arc<StandardMemoryAllocator>) -> Subbuffer<[T]> {
         Buffer::from_iter(
             allocator,

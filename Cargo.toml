@@ -20,7 +20,8 @@ light_ranged_integers = "0.1.3"
 image = "0.25.10"
 tuple-map = "0.4.0"
 memory-stats = "1.2.0"
-rand = { version = "0.10.1", features = ["std_rng", "std"] }
+frand = "0.10.1"
+rustc-hash = "2.1.2"
 
 [profile.dev]
 opt-level = 1

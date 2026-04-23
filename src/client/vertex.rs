@@ -12,6 +12,8 @@ pub trait VertexFormat: BufferContents + VertexLayout + Copy + Debug {
     type Uniform: BufferContents + Copy;
 
     fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>);
+
+    fn transform(&self, transform: Self::PushConstantInput, inverse: Self::PushConstantInput) -> Self;
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -77,6 +79,7 @@ impl VertexPos {
 mod vpc {
     use crate::client::vertex::{VertexFormat, VertexPosCol};
     use crate::math::mat4::Mat4;
+    use crate::math::vec3::Vec3;
     use std::sync::Arc;
     use vulkano::device::Device;
     use vulkano::shader::ShaderModule;
@@ -89,6 +92,13 @@ mod vpc {
 
         fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>) {
             (vs::load(device.clone()).unwrap(), fs::load(device).unwrap())
+        }
+
+        fn transform(&self, transform: Self::PushConstantInput, inverse: Self::PushConstantInput) -> Self {
+            Self {
+                pos: (inverse.inverse() * transform).transform(Vec3::from(self.pos)).into(),
+                color: self.color,
+            }
         }
     }
 
@@ -158,6 +168,7 @@ mod vpc {
 mod vpt {
     use crate::client::vertex::{VertexFormat, VertexPosTex};
     use crate::math::mat4::Mat4;
+    use crate::math::vec3::Vec3;
     use std::sync::Arc;
     use vulkano::device::Device;
     use vulkano::shader::ShaderModule;
@@ -170,6 +181,13 @@ mod vpt {
 
         fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>) {
             (vs::load(device.clone()).unwrap(), fs::load(device).unwrap())
+        }
+
+        fn transform(&self, transform: Self::PushConstantInput, inverse: Self::PushConstantInput) -> Self {
+            Self {
+                pos: (inverse.inverse() * transform).transform(Vec3::from(self.pos)).into(),
+                uv: self.uv,
+            }
         }
     }
 

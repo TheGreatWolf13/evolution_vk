@@ -56,6 +56,17 @@ impl Mat4 {
     pub fn perspective(fov_y: impl Angle, aspect: f32, near: f32, far: f32) -> Self {
         Self(glam::Mat4::perspective_rh(*fov_y.to_radians(), aspect, near, far))
     }
+
+    #[inline]
+    #[must_use]
+    pub fn transform(&self, vec: Vec3) -> Vec3 {
+        Vec3(self.0.transform_point3(vec.0))
+    }
+
+    #[must_use]
+    pub fn inverse(&self) -> Self {
+        Self(self.0.inverse())
+    }
 }
 
 //Add

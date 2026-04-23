@@ -1,8 +1,8 @@
 ﻿use crate::util::error::Throwable;
 
 pub mod error;
+pub mod random;
 pub mod timer;
-mod random;
 
 pub type Result<T = ()> = core::result::Result<T, Throwable>;
 

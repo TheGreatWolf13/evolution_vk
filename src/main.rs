@@ -4,6 +4,7 @@ use crate::client::input::Input;
 use crate::client::mesh::{Mesh, MeshBuilder};
 use crate::client::vertex::{Vertex, VertexPosCol, VertexPosTex};
 use crate::math::mat4::Mat4;
+use crate::util::random::Random;
 use crate::util::timer::{FrameRateLimit, Timer};
 use log::info;
 use std::num::NonZero;
@@ -40,6 +41,21 @@ impl ApplicationHandler for Game {
                 let vc3 = Vertex::new().pos(0.0, 1.0, -1.0).color(0.0, 0.0, 1.0);
                 let engine = GraphicsEngine::new(&event_loop);
                 let allocator = engine.get_allocator().clone();
+                let mut rand = Random::with_word_seed("Mauren");
+                let blocks = (0..(32 * 32 * 32)).map(|_| rand.next::<bool>()).collect::<Vec<_>>();
+                let mut meshes = Vec::new();
+                let mut i = 0;
+                for z in 0..32 {
+                    for y in 0..32 {
+                        for x in 0..32 {
+                            if blocks[i] {
+                                meshes.push(MeshBuilder::new(Mat4::from_translation((x as f32, y as f32, z as f32))).cube());
+                            }
+                            i += 1;
+                        }
+                    }
+                }
+                let mesh = meshes.into_iter().reduce(|a, b| a.merge(b)).unwrap();
                 *self = Game::Init(GameData {
                     graphics: engine,
                     input: Input::new(),
@@ -48,9 +64,7 @@ impl ApplicationHandler for Game {
                     col_meshes: vec![
                         MeshBuilder::new(Mat4::IDENTITY).triangle([vc1, vc2, vc3]).build(allocator.clone()),
                     ],
-                    tex_meshes: vec![
-                        MeshBuilder::new(Mat4::from_translation((0.0, 0.0, -3.0))).cube().build(allocator),
-                    ],
+                    tex_meshes: vec![mesh.build(allocator)],
                 });
                 event_loop.set_control_flow(ControlFlow::Poll);
             }
