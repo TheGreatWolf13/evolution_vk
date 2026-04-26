@@ -1,4 +1,5 @@
-﻿use std::fmt::Debug;
+﻿use crate::math::mat4::Mat4;
+use std::fmt::Debug;
 use std::sync::Arc;
 use vulkano::buffer::BufferContents;
 use vulkano::device::Device;
@@ -6,14 +7,26 @@ use vulkano::pipeline::graphics::vertex_input::Vertex as VertexLayout;
 use vulkano::shader::ShaderModule;
 
 pub trait VertexFormat: BufferContents + VertexLayout + Copy + Debug {
-    type PushConstantInput: Into<Self::PushConstant> + Copy;
+    type PushConstantInput: Into<Self::PushConstant> + Transform;
     type PushConstant: BufferContents + Copy;
     type UniformInput: Into<Self::Uniform>;
     type Uniform: BufferContents + Copy;
 
     fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>);
 
-    fn transform(&self, transform: Self::PushConstantInput, inverse: Self::PushConstantInput) -> Self;
+    fn transform_and_untransform(&self, transform: Self::PushConstantInput, untransform: Self::PushConstantInput) -> Self;
+
+    fn transform(&self, transform: Self::PushConstantInput) -> Self;
+}
+
+pub trait Transform: Copy {
+    fn identity() -> Self;
+}
+
+impl Transform for Mat4 {
+    fn identity() -> Self {
+        Mat4::IDENTITY
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -94,9 +107,16 @@ mod vpc {
             (vs::load(device.clone()).unwrap(), fs::load(device).unwrap())
         }
 
-        fn transform(&self, transform: Self::PushConstantInput, inverse: Self::PushConstantInput) -> Self {
+        fn transform_and_untransform(&self, transform: Self::PushConstantInput, untransform: Self::PushConstantInput) -> Self {
             Self {
-                pos: (inverse.inverse() * transform).transform(Vec3::from(self.pos)).into(),
+                pos: (untransform.inverse() * transform).transform(Vec3::from(self.pos)).into(),
+                color: self.color,
+            }
+        }
+
+        fn transform(&self, transform: Self::PushConstantInput) -> Self {
+            Self {
+                pos: transform.transform(Vec3::from(self.pos)).into(),
                 color: self.color,
             }
         }
@@ -183,9 +203,16 @@ mod vpt {
             (vs::load(device.clone()).unwrap(), fs::load(device).unwrap())
         }
 
-        fn transform(&self, transform: Self::PushConstantInput, inverse: Self::PushConstantInput) -> Self {
+        fn transform_and_untransform(&self, transform: Self::PushConstantInput, untransform: Self::PushConstantInput) -> Self {
             Self {
-                pos: (inverse.inverse() * transform).transform(Vec3::from(self.pos)).into(),
+                pos: (untransform.inverse() * transform).transform(Vec3::from(self.pos)).into(),
+                uv: self.uv,
+            }
+        }
+
+        fn transform(&self, transform: Self::PushConstantInput) -> Self {
+            Self {
+                pos: transform.transform(Vec3::from(self.pos)).into(),
                 uv: self.uv,
             }
         }

@@ -12,6 +12,7 @@ pub mod mat3;
 pub mod mat4;
 pub mod quat;
 pub mod u8vec3;
+pub mod uvec2;
 pub mod vec2;
 pub mod vec3;
 pub mod vec4;

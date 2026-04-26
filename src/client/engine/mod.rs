@@ -7,6 +7,8 @@ use crate::client::input::InputHandler;
 use crate::client::mesh::Mesh;
 use crate::client::vertex::{VertexFormat, VertexPosCol, VertexPosTex};
 use log::{error, info};
+use std::env::current_dir;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
@@ -101,7 +103,7 @@ impl GraphicsEngine {
         let ds_allocator = Arc::new(StandardDescriptorSetAllocator::new(device.clone(), StandardDescriptorSetAllocatorCreateInfo::default()));
         let tex_pipeline = {
             let texture = {
-                let image = image::open("res/assets/textures/cobblestone.png").unwrap().to_rgba8();
+                let image = image::open(current_dir().unwrap().join("res/assets/textures/block/cobblestone.png")).unwrap().to_rgba8();
                 let extent = [image.width(), image.height(), 1];
                 let upload_buffer = Buffer::from_iter(
                     memory_allocator.clone(),

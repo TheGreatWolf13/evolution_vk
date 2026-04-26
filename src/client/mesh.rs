@@ -1,4 +1,4 @@
-﻿use crate::client::vertex::{Vertex, VertexFormat, VertexPosTex};
+﻿use crate::client::vertex::{Transform, Vertex, VertexFormat, VertexPosTex};
 use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
@@ -16,6 +16,7 @@ pub struct MeshBuilder<V: VertexFormat> {
     transform: V::PushConstantInput,
     vertex_buffer: Vec<V>,
     index_buffer: Vec<u32>,
+    local_transform: V::PushConstantInput,
 }
 
 impl<V: VertexFormat> Mesh<V> {
@@ -40,19 +41,30 @@ impl<V: VertexFormat> MeshBuilder<V> {
             transform,
             vertex_buffer: vec![],
             index_buffer: vec![],
+            local_transform: V::PushConstantInput::identity(),
         }
     }
 
-    pub fn triangle(mut self, vertices: [V; 3]) -> Self {
+    pub fn local_transform(mut self, local_transform: V::PushConstantInput) -> Self {
+        self.local_transform = local_transform;
+        self
+    }
+
+    pub fn reset_local_transform(mut self) -> Self {
+        self.local_transform = V::PushConstantInput::identity();
+        self
+    }
+
+    pub fn triangle(mut self, mut vertices: [V; 3]) -> Self {
         let index = self.vertex_buffer.len() as u32;
-        self.vertex_buffer.extend(vertices);
+        self.vertex_buffer.extend(vertices.iter_mut().map(|v| v.transform(self.local_transform)));
         self.index_buffer.extend([index, index + 1, index + 2]);
         self
     }
 
-    pub fn quad(mut self, vertices: [V; 4]) -> Self {
+    pub fn quad(mut self, mut vertices: [V; 4]) -> Self {
         let index = self.vertex_buffer.len() as u32;
-        self.vertex_buffer.extend(vertices);
+        self.vertex_buffer.extend(vertices.iter_mut().map(|v| v.transform(self.local_transform)));
         self.index_buffer.extend([index, index + 1, index + 2, index, index + 2, index + 3]);
         self
     }
@@ -71,7 +83,7 @@ impl<V: VertexFormat> MeshBuilder<V> {
     pub fn merge(mut self, mesh: MeshBuilder<V>) -> Self {
         let last_index = self.vertex_buffer.len() as u32;
         self.index_buffer.extend(mesh.index_buffer.iter().map(|i| i + last_index));
-        self.vertex_buffer.extend(mesh.vertex_buffer.iter().map(|v| v.transform(mesh.transform, self.transform)));
+        self.vertex_buffer.extend(mesh.vertex_buffer.iter().map(|v| v.transform_and_untransform(mesh.transform, self.transform)));
         self
     }
 

@@ -6,6 +6,7 @@ use crate::client::camera::Camera;
 use crate::client::engine::GraphicsEngine;
 use crate::client::input::Input;
 use crate::client::mesh::{Mesh, MeshBuilder};
+use crate::client::texture::TextureManager;
 use crate::client::vertex::{Vertex, VertexPosCol};
 use crate::math::chunk_pos::ChunkPos;
 use crate::math::mat4::Mat4;
@@ -36,6 +37,7 @@ struct GameData {
     timer: Timer,
     col_meshes: Vec<Mesh<VertexPosCol>>,
     chunk: Chunk<4>,
+    texture_manager: TextureManager,
 }
 
 impl ApplicationHandler for Game {
@@ -58,6 +60,7 @@ impl ApplicationHandler for Game {
                         MeshBuilder::new(Mat4::IDENTITY).triangle([vc1, vc2, vc3]).build(allocator.clone()).unwrap(),
                     ],
                     chunk,
+                    texture_manager: TextureManager::new(),
                 });
                 event_loop.set_control_flow(ControlFlow::Poll);
             }
