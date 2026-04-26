@@ -1,10 +1,17 @@
 ﻿use std::ops::{Add, Mul};
 
 pub mod angle;
+pub mod block_pos;
+pub mod chunk_pos;
 pub mod color;
+pub mod direction;
+pub mod ivec2;
+pub mod ivec3;
+pub mod local_chunk_pos;
 pub mod mat3;
 pub mod mat4;
 pub mod quat;
+pub mod u8vec3;
 pub mod vec2;
 pub mod vec3;
 pub mod vec4;

@@ -1,11 +1,16 @@
+extern crate core;
+
+use crate::block::Blocks;
+use crate::chunk::Chunk;
 use crate::client::camera::Camera;
 use crate::client::engine::GraphicsEngine;
 use crate::client::input::Input;
 use crate::client::mesh::{Mesh, MeshBuilder};
-use crate::client::vertex::{Vertex, VertexPosCol, VertexPosTex};
+use crate::client::vertex::{Vertex, VertexPosCol};
+use crate::math::chunk_pos::ChunkPos;
 use crate::math::mat4::Mat4;
-use crate::util::random::Random;
 use crate::util::timer::{FrameRateLimit, Timer};
+use itertools::Itertools;
 use log::info;
 use std::num::NonZero;
 use winit::application::ApplicationHandler;
@@ -13,9 +18,11 @@ use winit::event::{DeviceEvent, DeviceId, StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::WindowId;
 
-mod util;
-mod math;
+mod block;
 mod client;
+mod math;
+mod util;
+mod chunk;
 
 enum Game {
     Uninit,
@@ -28,7 +35,7 @@ struct GameData {
     camera: Camera,
     timer: Timer,
     col_meshes: Vec<Mesh<VertexPosCol>>,
-    tex_meshes: Vec<Mesh<VertexPosTex>>,
+    chunk: Chunk<4>,
 }
 
 impl ApplicationHandler for Game {
@@ -41,30 +48,16 @@ impl ApplicationHandler for Game {
                 let vc3 = Vertex::new().pos(0.0, 1.0, -1.0).color(0.0, 0.0, 1.0);
                 let engine = GraphicsEngine::new(&event_loop);
                 let allocator = engine.get_allocator().clone();
-                let mut rand = Random::with_word_seed("Mauren");
-                let blocks = (0..(32 * 32 * 32)).map(|_| rand.next::<bool>()).collect::<Vec<_>>();
-                let mut meshes = Vec::new();
-                let mut i = 0;
-                for z in 0..32 {
-                    for y in 0..32 {
-                        for x in 0..32 {
-                            if blocks[i] {
-                                meshes.push(MeshBuilder::new(Mat4::from_translation((x as f32, y as f32, z as f32))).cube());
-                            }
-                            i += 1;
-                        }
-                    }
-                }
-                let mesh = meshes.into_iter().reduce(|a, b| a.merge(b)).unwrap();
+                let chunk = Chunk::new(ChunkPos::new(0, 0));
                 *self = Game::Init(GameData {
                     graphics: engine,
                     input: Input::new(),
                     camera: Camera::new(),
                     timer: Timer::new(NonZero::new(20).unwrap(), FrameRateLimit::Unlimited),
                     col_meshes: vec![
-                        MeshBuilder::new(Mat4::IDENTITY).triangle([vc1, vc2, vc3]).build(allocator.clone()),
+                        MeshBuilder::new(Mat4::IDENTITY).triangle([vc1, vc2, vc3]).build(allocator.clone()).unwrap(),
                     ],
-                    tex_meshes: vec![mesh.build(allocator)],
+                    chunk,
                 });
                 event_loop.set_control_flow(ControlFlow::Poll);
             }
@@ -134,11 +127,13 @@ impl ApplicationHandler for Game {
                     });
                     data.timer.try_frame(|partial_tick| {
                         let engine = &mut data.graphics;
+                        let pos = data.chunk.get_pos();
+                        data.chunk.get_sections_mut().iter_mut().for_each(|s| s.remesh(pos, engine.get_allocator().clone()));
                         data.camera.adjust(engine.get_window().inner_size(), partial_tick);
                         engine.update_fps();
                         engine.resize_or_update_swapchain();
                         engine.swap_buffers(
-                            ((data.camera.get_view(), data.camera.get_proj()).into(), &data.tex_meshes),
+                            ((data.camera.get_view(), data.camera.get_proj()).into(), data.chunk.get_sections().iter().map(|s| s.get_mesh()).flatten()),
                             ((data.camera.get_view(), data.camera.get_proj()).into(), &data.col_meshes),
                         );
                     });
@@ -169,12 +164,16 @@ impl ApplicationHandler for Game {
     }
 }
 
+#[allow(unstable_name_collisions)]
 fn main() {
     unsafe {
+        //SAFETY: called from a single threaded environment
         std::env::set_var("RUST_LOG", "info");
     }
     env_logger::builder().format_source_path(true).format_target(false).init();
     info!("Initializing Evolution VK");
+    let x = Blocks::all().map(|b| b.get_name_id()).intersperse(", ").collect::<String>();
+    info!("{}", x);
     let event_loop = EventLoop::new().unwrap();
     let mut game = Game::Uninit;
     event_loop.run_app(&mut game).unwrap();

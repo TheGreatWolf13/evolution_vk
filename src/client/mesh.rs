@@ -28,6 +28,10 @@ impl<V: VertexFormat> Mesh<V> {
                 .draw_indexed(self.index_buffer.len() as u32, 1, 0, 0, 0)?
         )
     }
+
+    pub fn get_transform(&self) -> V::PushConstantInput {
+        self.transform
+    }
 }
 
 impl<V: VertexFormat> MeshBuilder<V> {
@@ -53,12 +57,15 @@ impl<V: VertexFormat> MeshBuilder<V> {
         self
     }
 
-    pub fn build(self, allocator: Arc<StandardMemoryAllocator>) -> Mesh<V> {
-        Mesh {
+    pub fn build(self, allocator: Arc<StandardMemoryAllocator>) -> Option<Mesh<V>> {
+        if self.vertex_buffer.is_empty() {
+            return None;
+        }
+        Some(Mesh {
             transform: self.transform,
             vertex_buffer: Self::create_buffer(BufferUsage::VERTEX_BUFFER, self.vertex_buffer, allocator.clone()),
             index_buffer: Self::create_buffer(BufferUsage::INDEX_BUFFER, self.index_buffer, allocator),
-        }
+        })
     }
 
     pub fn merge(mut self, mesh: MeshBuilder<V>) -> Self {
@@ -85,45 +92,45 @@ impl<V: VertexFormat> MeshBuilder<V> {
 }
 
 impl MeshBuilder<VertexPosTex> {
-    pub fn cube(mut self) -> Self {
+    pub fn cube(mut self, x: f32, y: f32, z: f32) -> Self {
         self.vertex_buffer.reserve(4 * 6);
         self.index_buffer.reserve(6 * 6);
         self.quad([
             //Down
-            Vertex::new().pos(0.0, 0.0, 0.0).uv(0.0, 1.0),
-            Vertex::new().pos(1.0, 0.0, 0.0).uv(1.0, 1.0),
-            Vertex::new().pos(1.0, 0.0, 1.0).uv(1.0, 0.0),
-            Vertex::new().pos(0.0, 0.0, 1.0).uv(0.0, 0.0),
+            Vertex::new().pos(x, y, z).uv(0.0, 1.0),
+            Vertex::new().pos(x + 1.0, y, z).uv(1.0, 1.0),
+            Vertex::new().pos(x + 1.0, y, z + 1.0).uv(1.0, 0.0),
+            Vertex::new().pos(x, y, z + 1.0).uv(0.0, 0.0),
         ]).quad([
             //Up
-            Vertex::new().pos(0.0, 1.0, 0.0).uv(0.0, 0.0),
-            Vertex::new().pos(0.0, 1.0, 1.0).uv(0.0, 1.0),
-            Vertex::new().pos(1.0, 1.0, 1.0).uv(1.0, 1.0),
-            Vertex::new().pos(1.0, 1.0, 0.0).uv(1.0, 0.0),
+            Vertex::new().pos(x, y + 1.0, z).uv(0.0, 0.0),
+            Vertex::new().pos(x, y + 1.0, z + 1.0).uv(0.0, 1.0),
+            Vertex::new().pos(x + 1.0, y + 1.0, z + 1.0).uv(1.0, 1.0),
+            Vertex::new().pos(x + 1.0, y + 1.0, z).uv(1.0, 0.0),
         ]).quad([
             //South
-            Vertex::new().pos(0.0, 0.0, 1.0).uv(0.0, 1.0),
-            Vertex::new().pos(1.0, 0.0, 1.0).uv(1.0, 1.0),
-            Vertex::new().pos(1.0, 1.0, 1.0).uv(1.0, 0.0),
-            Vertex::new().pos(0.0, 1.0, 1.0).uv(0.0, 0.0),
+            Vertex::new().pos(x, y, z + 1.0).uv(0.0, 1.0),
+            Vertex::new().pos(x + 1.0, y, z + 1.0).uv(1.0, 1.0),
+            Vertex::new().pos(x + 1.0, y + 1.0, z + 1.0).uv(1.0, 0.0),
+            Vertex::new().pos(x, y + 1.0, z + 1.0).uv(0.0, 0.0),
         ]).quad([
             //North
-            Vertex::new().pos(1.0, 0.0, 0.0).uv(0.0, 1.0),
-            Vertex::new().pos(0.0, 0.0, 0.0).uv(1.0, 1.0),
-            Vertex::new().pos(0.0, 1.0, 0.0).uv(1.0, 0.0),
-            Vertex::new().pos(1.0, 1.0, 0.0).uv(0.0, 0.0),
+            Vertex::new().pos(x + 1.0, y, z).uv(0.0, 1.0),
+            Vertex::new().pos(x, y, z).uv(1.0, 1.0),
+            Vertex::new().pos(x, y + 1.0, z).uv(1.0, 0.0),
+            Vertex::new().pos(x + 1.0, y + 1.0, z).uv(0.0, 0.0),
         ]).quad([
             //East
-            Vertex::new().pos(1.0, 0.0, 1.0).uv(0.0, 1.0),
-            Vertex::new().pos(1.0, 0.0, 0.0).uv(1.0, 1.0),
-            Vertex::new().pos(1.0, 1.0, 0.0).uv(1.0, 0.0),
-            Vertex::new().pos(1.0, 1.0, 1.0).uv(0.0, 0.0),
+            Vertex::new().pos(x + 1.0, y, z + 1.0).uv(0.0, 1.0),
+            Vertex::new().pos(x + 1.0, y, z).uv(1.0, 1.0),
+            Vertex::new().pos(x + 1.0, y + 1.0, z).uv(1.0, 0.0),
+            Vertex::new().pos(x + 1.0, y + 1.0, z + 1.0).uv(0.0, 0.0),
         ]).quad([
             //West
-            Vertex::new().pos(0.0, 0.0, 0.0).uv(0.0, 1.0),
-            Vertex::new().pos(0.0, 0.0, 1.0).uv(1.0, 1.0),
-            Vertex::new().pos(0.0, 1.0, 1.0).uv(1.0, 0.0),
-            Vertex::new().pos(0.0, 1.0, 0.0).uv(0.0, 0.0),
+            Vertex::new().pos(x, y, z).uv(0.0, 1.0),
+            Vertex::new().pos(x, y, z + 1.0).uv(1.0, 1.0),
+            Vertex::new().pos(x, y + 1.0, z + 1.0).uv(1.0, 0.0),
+            Vertex::new().pos(x, y + 1.0, z).uv(0.0, 0.0),
         ])
     }
 }

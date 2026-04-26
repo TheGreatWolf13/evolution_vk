@@ -295,7 +295,7 @@ impl GraphicsEngine {
         }
     }
 
-    pub fn swap_buffers(&mut self, tex: (<VertexPosTex as VertexFormat>::Uniform, &Vec<Mesh<VertexPosTex>>), col: (<VertexPosCol as VertexFormat>::Uniform, &Vec<Mesh<VertexPosCol>>)) {
+    pub fn swap_buffers<'a, 'b>(&mut self, tex: (<VertexPosTex as VertexFormat>::Uniform, impl IntoIterator<Item = &'a Mesh<VertexPosTex>>), col: (<VertexPosCol as VertexFormat>::Uniform, impl IntoIterator<Item = &'b Mesh<VertexPosCol>>)) {
         self.swapchain.swap_buffers(|swapchain, acquire_future, framebuffer, present_info| {
             let mut builder = AutoCommandBufferBuilder::primary(&self.cb_allocator, self.queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
             builder

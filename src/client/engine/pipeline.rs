@@ -30,11 +30,11 @@ pub struct Pipeline<V: VertexFormat> {
 }
 
 pub trait PipelineConsumer {
-    fn render<V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, swapchain: &SwapChain, meshes: &Vec<Mesh<V>>) -> Result<&mut Self, Box<ValidationError>>;
+    fn render<'a, V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, swapchain: &SwapChain, meshes: impl IntoIterator<Item = &'a Mesh<V>>) -> Result<&mut Self, Box<ValidationError>>;
 }
 
 impl PipelineConsumer for AutoCommandBufferBuilder<PrimaryAutoCommandBuffer> {
-    fn render<V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, swapchain: &SwapChain, meshes: &Vec<Mesh<V>>) -> Result<&mut Self, Box<ValidationError>> {
+    fn render<'a, V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, swapchain: &SwapChain, meshes: impl IntoIterator<Item = &'a Mesh<V>>) -> Result<&mut Self, Box<ValidationError>> {
         self
             .bind_pipeline_graphics(pipeline.pipeline.clone())?
             .bind_descriptor_sets(PipelineBindPoint::Graphics, pipeline.pipeline.layout().clone(), 0, pipeline.descriptor_sets.get(&swapchain).clone())?;

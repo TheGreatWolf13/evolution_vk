@@ -55,7 +55,7 @@ impl SwapChain {
         }
     }
 
-    pub fn swap_buffers(&mut self, mut after_swap: impl FnMut(&mut Self, SwapchainAcquireFuture, Arc<Framebuffer>, SwapchainPresentInfo)) {
+    pub fn swap_buffers(&mut self, after_swap: impl FnOnce(&mut Self, SwapchainAcquireFuture, Arc<Framebuffer>, SwapchainPresentInfo)) {
         let (image_index, suboptimal, acquire_future) = match swapchain::acquire_next_image(self.swapchain.clone(), None).map_err(Validated::unwrap) {
             Ok(r) => r,
             Err(VulkanError::OutOfDate) => {
