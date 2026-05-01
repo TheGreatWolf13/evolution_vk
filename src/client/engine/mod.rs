@@ -6,20 +6,20 @@ use crate::client::engine::swapchain::SwapChain;
 use crate::client::input::InputHandler;
 use crate::client::mesh::Mesh;
 use crate::client::vertex::{VertexFormat, VertexPosCol, VertexPosTex};
+use crate::if_else;
 use log::{error, info};
 use std::env::current_dir;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo, PrimaryCommandBufferAbstract, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, BlitImageInfo, CommandBufferUsage, CopyBufferToImageInfo, PrimaryCommandBufferAbstract, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents};
 use vulkano::descriptor_set::allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo};
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo, QueueFlags};
 use vulkano::format::Format;
-use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo};
+use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo, SamplerMipmapMode, LOD_CLAMP_NONE};
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo};
@@ -104,7 +104,9 @@ impl GraphicsEngine {
         let tex_pipeline = {
             let texture = {
                 let image = image::open(current_dir().unwrap().join("res/assets/textures/block/cobblestone.png")).unwrap().to_rgba8();
-                let extent = [image.width(), image.height(), 1];
+                let width = image.width();
+                let height = image.height();
+                let extent = [width, height, 1];
                 let upload_buffer = Buffer::from_iter(
                     memory_allocator.clone(),
                     BufferCreateInfo {
@@ -123,20 +125,45 @@ impl GraphicsEngine {
                         image_type: ImageType::Dim2d,
                         format: Format::R8G8B8A8_SRGB,
                         extent,
-                        usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+                        usage: ImageUsage::TRANSFER_DST | ImageUsage::TRANSFER_SRC | ImageUsage::SAMPLED,
+                        mip_levels: 5,
                         ..Default::default()
                     },
                     AllocationCreateInfo::default(),
                 ).unwrap();
                 uploader.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(upload_buffer, image.clone())).unwrap();
+                let mut src_width = width;
+                let mut src_height = height;
+                for i in 0..(5 - 1) {
+                    let dst_width = if_else!(src_width > 1 => src_width / 2 ; 1);
+                    let dst_height = if_else!(src_height > 1 => src_height / 2 ; 1);
+                    let mut info = BlitImageInfo::images(image.clone(), image.clone());
+                    info.regions[0].src_subresource.mip_level = i;
+                    info.regions[0].src_offsets = [
+                        [0, 0, 0],
+                        [src_width, src_height, 1],
+                    ];
+                    info.regions[0].dst_subresource.mip_level = i + 1;
+                    info.regions[0].dst_offsets = [
+                        [0, 0, 0],
+                        [dst_width, dst_height, 1],
+                    ];
+                    info.filter = Filter::Linear;
+                    uploader.blit_image(info).unwrap();
+                    src_width = dst_width;
+                    src_height = dst_height;
+                }
                 ImageView::new_default(image).unwrap()
             };
             let sampler = Sampler::new(
                 device.clone(),
                 SamplerCreateInfo {
                     mag_filter: Filter::Nearest,
-                    min_filter: Filter::Linear,
+                    min_filter: Filter::Nearest,
                     address_mode: [SamplerAddressMode::ClampToEdge; 3],
+                    mipmap_mode: SamplerMipmapMode::Linear,
+                    lod: 0.0..=LOD_CLAMP_NONE,
+                    mip_lod_bias: -0.0,
                     ..Default::default()
                 },
             ).unwrap();
