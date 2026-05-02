@@ -1,7 +1,6 @@
 ﻿use crate::client::texture::atlas::{RawTextureInfo, TextureId, TextureInfo};
 use crate::math::uvec2::UVec2;
 use crate::math::vec2::Vec2;
-use std::collections::HashMap;
 
 #[derive(Copy, Clone)]
 struct Rect(UVec2, UVec2, u32);
@@ -57,7 +56,6 @@ impl UVConstructor {
 pub(super) struct TexturePlacer {
     size: UVec2,
     free_rects: Vec<Rect>,
-    placed_textures: HashMap<TextureId, Rect>,
     last_id: u32,
 }
 
@@ -70,7 +68,6 @@ impl TexturePlacer {
         Self {
             size: starting_size,
             free_rects: vec![Rect(UVec2::ZERO, starting_size, 0)],
-            placed_textures: HashMap::new(),
             last_id: 0,
         }
     }

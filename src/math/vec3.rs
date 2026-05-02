@@ -2,18 +2,10 @@
 use crate::math::vec4::Vec4;
 use crate::math::Vector3;
 use crate::{impl_bin_op, impl_from, impl_un_op, impl_vec3};
-use std::fmt;
-use std::fmt::{Debug, Formatter};
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 #[derive(Copy, Clone, PartialEq)]
 pub struct Vec3(pub(super) glam::Vec3);
-
-impl Debug for Vec3 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&format!("({:?}, {:?}, {:?})", self.x(), self.y(), self.z()))
-    }
-}
 
 impl Vec3 {
     pub const ZERO: Self = Self(glam::Vec3::ZERO);
@@ -104,8 +96,8 @@ impl_bin_op!(Vec3 * (f32, f32, f32): Mul mul, (self, rhs) => Self(self.0 * glam:
 impl_bin_op!(Vec3 * [f32; 3]: Mul mul, (self, rhs) => Self(self.0 * glam::Vec3::from(rhs)));
 impl_bin_op!(Vec3 * f32: Mul mul, (self, rhs) => Self(self.0 * rhs));
 //Neg
-impl_un_op!(- Vec3: Neg neg, self => Self(-self.0));
-//From
+impl_un_op!(-Vec3: Neg neg, self => Self(-self.0));
+//From 
 impl_from!((f32, f32, f32) as Vec3: v => Self(glam::Vec3::from(v)));
 impl_from!([f32; 3] as Vec3: v => Self(glam::Vec3::from(v)));
 impl_from!(Vec3 as (f32, f32, f32): v => (v.x(), v.y(), v.z()));

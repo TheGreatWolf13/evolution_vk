@@ -1,6 +1,7 @@
 ﻿use crate::chunk::Section;
 use crate::math::ivec3::IVec3;
-use crate::math::local_chunk_pos::{LocalChunkPos, Range};
+use crate::math::local_section_pos::{LocalSectionPos, Range};
+use crate::math::Vector3;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
@@ -22,43 +23,43 @@ impl BlockPos {
 
     #[inline(always)]
     #[must_use]
-    pub const fn x(&self) -> i32 {
+    pub fn x(&self) -> i32 {
         self.0.x()
     }
 
     #[inline(always)]
     #[must_use]
-    pub const fn y(&self) -> i32 {
+    pub fn y(&self) -> i32 {
         self.0.y()
     }
 
     #[inline(always)]
     #[must_use]
-    pub const fn z(&self) -> i32 {
+    pub fn z(&self) -> i32 {
         self.0.z()
     }
 
     #[inline(always)]
     #[must_use]
-    pub const fn x_mut(&mut self) -> &mut i32 {
+    pub fn x_mut(&mut self) -> &mut i32 {
         self.0.x_mut()
     }
 
     #[inline(always)]
     #[must_use]
-    pub const fn y_mut(&mut self) -> &mut i32 {
+    pub fn y_mut(&mut self) -> &mut i32 {
         self.0.y_mut()
     }
 
     #[inline(always)]
     #[must_use]
-    pub const fn z_mut(&mut self) -> &mut i32 {
+    pub fn z_mut(&mut self) -> &mut i32 {
         self.0.z_mut()
     }
 
     #[inline(always)]
     #[must_use]
-    pub fn get_local_pos(&self) -> LocalChunkPos {
-        LocalChunkPos::new(Range::new((self.x() & Section::MASK as i32) as u8), Range::new((self.y() & Section::MASK as i32) as u8), Range::new((self.z() & Section::MASK as i32) as u8))
+    pub fn get_local_pos(&self) -> LocalSectionPos {
+        LocalSectionPos::new(Range::new((self.x() & Section::MASK as i32) as i8), Range::new((self.y() & Section::MASK as i32) as i8), Range::new((self.z() & Section::MASK as i32) as i8))
     }
 }

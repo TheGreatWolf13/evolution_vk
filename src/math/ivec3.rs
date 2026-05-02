@@ -1,7 +1,6 @@
-﻿use crate::{impl_bin_op, impl_from, impl_un_op};
+﻿use crate::math::Vector3;
+use crate::{impl_bin_op, impl_from, impl_un_op, impl_vec3};
 use glam::IVec3 as V;
-use std::fmt;
-use std::fmt::{Debug, Formatter};
 use std::ops::SubAssign;
 use std::ops::{Add, Mul};
 use std::ops::{AddAssign, Sub};
@@ -12,12 +11,6 @@ pub struct IVec3(pub(super) V);
 
 type P = i32;
 type S = IVec3;
-
-impl Debug for S {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&format!("({:?}, {:?}, {:?})", self.x(), self.y(), self.z()))
-    }
-}
 
 impl S {
     pub const ZERO: Self = Self(V::ZERO);
@@ -31,44 +24,10 @@ impl S {
     pub const fn new(x: P, y: P, z: P) -> Self {
         Self(V::new(x, y, z))
     }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn x(&self) -> P {
-        self.0.x
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn y(&self) -> P {
-        self.0.y
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn z(&self) -> P {
-        self.0.z
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn x_mut(&mut self) -> &mut P {
-        &mut self.0.x
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn y_mut(&mut self) -> &mut P {
-        &mut self.0.y
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn z_mut(&mut self) -> &mut P {
-        &mut self.0.z
-    }
 }
 
+//Vec
+impl_vec3!(S: P => 0 x y z);
 //Add
 impl_bin_op!(S + S: Add add, (self, rhs) => Self(self.0 + rhs.0));
 impl_bin_op!(S + (P, P, P): Add add, (self, rhs) => Self(self.0 + V::from(rhs)));

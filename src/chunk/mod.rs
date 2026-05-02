@@ -3,7 +3,7 @@ use crate::client::mesh::{Mesh, MeshBuilder};
 use crate::client::model::ModelManager;
 use crate::client::vertex::VertexPosTex;
 use crate::math::chunk_pos::ChunkPos;
-use crate::math::local_chunk_pos::LocalChunkPos;
+use crate::math::local_section_pos::LocalSectionPos;
 use crate::math::mat4::Mat4;
 use crate::{if_else, Block};
 use itertools::Itertools;
@@ -25,8 +25,8 @@ pub struct Section {
 }
 
 impl Section {
-    pub const SIZE: u8 = 32;
-    pub const MASK: u8 = Self::SIZE - 1;
+    pub const SIZE: i8 = 32;
+    pub const MASK: i8 = Self::SIZE - 1;
 
     pub fn get_mesh(&self) -> Option<&Mesh<VertexPosTex>> {
         self.mesh.as_ref()
@@ -38,7 +38,7 @@ impl Section {
             for x in 0..Self::SIZE {
                 for y in 0..Self::SIZE {
                     for z in 0..Self::SIZE {
-                        let pos = LocalChunkPos::new(x.into(), y.into(), z.into());
+                        let pos = LocalSectionPos::new(x.into(), y.into(), z.into());
                         let block = self.blocks.get_block_at(pos);
                         if block != Block!(AIR) {
                             builder = builder.local_transform(Mat4::from_translation((x as f32, y as f32, z as f32))).model(model_manager.get_model(block));

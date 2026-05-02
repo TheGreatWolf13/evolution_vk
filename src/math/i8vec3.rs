@@ -1,16 +1,16 @@
 ﻿use crate::math::Vector3;
-use crate::{impl_bin_op, impl_from, impl_vec3};
-use glam::U8Vec3 as V;
-use std::ops::AddAssign;
+use crate::{impl_bin_op, impl_from, impl_un_op, impl_vec3};
+use glam::I8Vec3 as V;
 use std::ops::MulAssign;
 use std::ops::SubAssign;
 use std::ops::{Add, Mul, Sub};
+use std::ops::{AddAssign, Neg};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
-pub struct U8Vec3(pub(super) V);
+pub struct I8Vec3(pub(super) V);
 
-type P = u8;
-type S = U8Vec3;
+type P = i8;
+type S = I8Vec3;
 
 impl S {
     pub const ZERO: Self = Self(V::ZERO);
@@ -38,6 +38,8 @@ impl_bin_op!(S - (P, P, P): Sub sub, (self, rhs) => Self(self.0 - V::from(rhs)))
 impl_bin_op!(S - [P; 3]: Sub sub, (self, rhs) => Self(self.0 - V::from(rhs)));
 //Mul
 impl_bin_op!(S * P: Mul mul, (self, rhs) => Self(self.0 * rhs));
+//Neg
+impl_un_op!(-S: Neg neg, self => Self(-self.0));
 //From
 impl_from!((P, P, P) as S: v => Self(V::from(v)));
 impl_from!([P; 3] as S: v => Self(V::from(v)));

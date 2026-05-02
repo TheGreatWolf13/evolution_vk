@@ -1,5 +1,4 @@
 ﻿use crate::math::direction::Axis;
-use bitvec::macros::internal::funty::Floating;
 use std::ops::{Add, Mul};
 
 pub mod angle;
@@ -7,9 +6,10 @@ pub mod block_pos;
 pub mod chunk_pos;
 pub mod color;
 pub mod direction;
+pub mod i8vec3;
 pub mod ivec2;
 pub mod ivec3;
-pub mod local_chunk_pos;
+pub mod local_section_pos;
 pub mod mat3;
 pub mod mat4;
 pub mod quat;
@@ -151,7 +151,7 @@ pub trait Vector3 {
 #[macro_export]
 macro_rules! impl_vec3 {
     ($ty:ty: $c:ty => $acc:tt $x:ident $y:ident $z:ident) => {
-        impl Vector3 for $ty {
+        impl crate::math::Vector3 for $ty {
             type T = $c;
 
             #[inline]
@@ -184,6 +184,12 @@ macro_rules! impl_vec3 {
                 &mut self.$acc.$z
             }
         }
+
+        impl std::fmt::Debug for $ty {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str(&format!("({:?}, {:?}, {:?})", self.x(), self.y(), self.z()))
+            }
+        }
     };
 }
 
@@ -192,16 +198,6 @@ pub trait MinMax {
 
     fn max(self, other: Self) -> Self;
 }
-
-// impl<T: Ord + Sized> MinMax for T {
-//     fn min(self, other: Self) -> Self {
-//         self.min(other)
-//     }
-//
-//     fn max(self, other: Self) -> Self {
-//         self.max(other)
-//     }
-// }
 
 impl MinMax for f32 {
     fn min(self, other: Self) -> Self {

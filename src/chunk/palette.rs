@@ -1,5 +1,5 @@
 ﻿use crate::block::Block;
-use crate::math::local_chunk_pos::LocalChunkPos;
+use crate::math::local_section_pos::LocalSectionPos;
 use bitvec::field::BitField;
 use bitvec::vec::BitVec;
 use std::collections::HashMap;
@@ -27,7 +27,7 @@ impl<T> IndexedMultiMap<T> {
         }
     }
 
-    fn get_indexed(&self, data: &BitVec, pos: LocalChunkPos) -> u16 {
+    fn get_indexed(&self, data: &BitVec, pos: LocalSectionPos) -> u16 {
         let mut index = pos.z() as usize + pos.y() as usize * 16 + pos.x() as usize * (16 * 16);
         index *= self.bits_per_block as usize;
         data[index..(index + self.bits_per_block as usize)].load()
@@ -47,7 +47,7 @@ impl BlockPallet {
         BlockPallet(Palette::Single(block))
     }
 
-    pub fn get_block_at(&self, pos: LocalChunkPos) -> Block {
+    pub fn get_block_at(&self, pos: LocalSectionPos) -> Block {
         match &self.0 {
             Palette::Single(b) => b,
             Palette::Multi(palette, data) => {
