@@ -1,10 +1,19 @@
 ﻿use crate::util::error::Throwable;
+use std::any::type_name;
 
 pub mod error;
 pub mod random;
 pub mod timer;
 
 pub type Result<T = ()> = core::result::Result<T, Throwable>;
+
+pub struct Utils;
+
+impl Utils {
+    pub fn name_of<T: ?Sized>() -> &'static str {
+        type_name::<T>().split("::").last().unwrap()
+    }
+}
 
 #[macro_export]
 macro_rules! impl_from {

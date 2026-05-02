@@ -2,6 +2,7 @@
 use crate::math::direction::{Axis, Direction};
 use crate::math::i8vec3::I8Vec3;
 use crate::math::Vector3;
+use crate::util::Utils;
 use enum_iterator::all;
 use light_ranged_integers::RangedI8;
 use std::fmt;
@@ -14,7 +15,7 @@ pub type Range = RangedI8<0, { Section::MASK }>;
 
 impl Debug for LocalSectionPos {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&format!("LocalChunkPos({:?}, {:?}, {:?})", self.x(), self.y(), self.z()))
+        f.write_str(&format!("{}({:?}, {:?}, {:?})", Utils::name_of::<Self>(), self.x(), self.y(), self.z()))
     }
 }
 
