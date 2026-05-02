@@ -1,5 +1,7 @@
-﻿use crate::math::vec4::Vec4;
-use crate::{impl_bin_op, impl_from, impl_un_op};
+﻿use crate::math::ivec3::IVec3;
+use crate::math::vec4::Vec4;
+use crate::math::Vector3;
+use crate::{impl_bin_op, impl_from, impl_un_op, impl_vec3};
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
@@ -55,7 +57,7 @@ impl Vec3 {
 
     #[inline]
     #[must_use]
-    pub const fn horiz_len_sqr(self) -> f32 {
+    pub fn horiz_len_sqr(self) -> f32 {
         self.x() * self.x() + self.z() * self.z()
     }
 
@@ -79,47 +81,13 @@ impl Vec3 {
 
     #[inline]
     #[must_use]
-    pub const fn x(self) -> f32 {
-        self.0.x
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn y(self) -> f32 {
-        self.0.y
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn z(self) -> f32 {
-        self.0.z
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn x_mut(&mut self) -> &mut f32 {
-        &mut self.0.x
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn y_mut(&mut self) -> &mut f32 {
-        &mut self.0.y
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn z_mut(&mut self) -> &mut f32 {
-        &mut self.0.z
-    }
-
-    #[inline]
-    #[must_use]
     pub fn to_homogeneous(&self) -> Vec4 {
         Vec4(self.0.to_homogeneous())
     }
 }
 
+//Vec
+impl_vec3!(Vec3: f32 => 0 x y z);
 //Add
 impl_bin_op!(Vec3 + Vec3: Add add, (self, rhs) => Self(self.0 + rhs.0));
 impl_bin_op!(Vec3 + (f32, f32, f32): Add add, (self, rhs) => Self(self.0 + glam::Vec3::from(rhs)));
@@ -142,3 +110,4 @@ impl_from!((f32, f32, f32) as Vec3: v => Self(glam::Vec3::from(v)));
 impl_from!([f32; 3] as Vec3: v => Self(glam::Vec3::from(v)));
 impl_from!(Vec3 as (f32, f32, f32): v => (v.x(), v.y(), v.z()));
 impl_from!(Vec3 as [f32; 3]: v => [v.x(), v.y(), v.z()]);
+impl_from!(IVec3 as Vec3: v => Self(v.0.as_vec3()));

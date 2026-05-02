@@ -64,9 +64,9 @@ impl Vertex {
         Self
     }
 
-    pub fn pos(self, x: f32, y: f32, z: f32) -> VertexPos {
+    pub fn pos(self, pos: impl Into<[f32; 3]>) -> VertexPos {
         VertexPos {
-            pos: [x, y, z]
+            pos: pos.into()
         }
     }
 }
@@ -81,10 +81,10 @@ impl VertexPos {
         }
     }
 
-    pub fn uv(self, u: f32, v: f32) -> VertexPosTex {
+    pub fn uv(self, uv: impl Into<[f32; 2]>) -> VertexPosTex {
         VertexPosTex {
             pos: self.pos,
-            uv: [u, v],
+            uv: uv.into(),
         }
     }
 }

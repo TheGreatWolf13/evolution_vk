@@ -1,5 +1,6 @@
 ﻿use crate::chunk::palette::BlockPallet;
 use crate::client::mesh::{Mesh, MeshBuilder};
+use crate::client::model::ModelManager;
 use crate::client::vertex::VertexPosTex;
 use crate::math::chunk_pos::ChunkPos;
 use crate::math::local_chunk_pos::LocalChunkPos;
@@ -31,7 +32,7 @@ impl Section {
         self.mesh.as_ref()
     }
 
-    pub fn remesh(&mut self, pos: ChunkPos, allocator: Arc<StandardMemoryAllocator>) {
+    pub fn remesh(&mut self, pos: ChunkPos, model_manager: &ModelManager, allocator: Arc<StandardMemoryAllocator>) {
         if self.dirty {
             let mut builder = MeshBuilder::new(Mat4::from_translation((pos.x() as f32 * Section::SIZE as f32, self.index as f32 * Section::SIZE as f32, pos.z() as f32 * Section::SIZE as f32)));
             for x in 0..Self::SIZE {
@@ -39,8 +40,8 @@ impl Section {
                     for z in 0..Self::SIZE {
                         let pos = LocalChunkPos::new(x.into(), y.into(), z.into());
                         let block = self.blocks.get_block_at(pos);
-                        if block == Block!(STONE) {
-                            builder = builder.cube(x as f32, y as f32, z as f32);
+                        if block != Block!(AIR) {
+                            builder = builder.local_transform(Mat4::from_translation((x as f32, y as f32, z as f32))).model(model_manager.get_model(block));
                         }
                     }
                 }
@@ -58,7 +59,7 @@ impl<const Y: usize> Chunk<Y> {
             sections: (0..Y).map(|i| {
                 Section {
                     index: i as u8,
-                    blocks: BlockPallet::from_single(if_else!(i < Y / 2 => Block!(STONE) ; Block!(AIR))),
+                    blocks: BlockPallet::from_single(if_else!(i < Y / 4 => Block!(STONE) ; if_else!(i < Y / 2 => Block!(DIRT) ; Block!(AIR)))),
                     mesh: None,
                     dirty: true,
                 }

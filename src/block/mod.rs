@@ -11,6 +11,10 @@ static mut REGISTRY: Vec<Block> = vec![];
 pub static AIR: Block = BlockInner::new("air");
 #[dynamic]
 pub static STONE: Block = BlockInner::new("stone");
+#[dynamic]
+pub static COBBLESTONE: Block = BlockInner::new("cobblestone");
+#[dynamic]
+pub static DIRT: Block = BlockInner::new("dirt");
 
 pub struct BlockInner {
     name_id: &'static str,
@@ -23,7 +27,7 @@ impl Debug for BlockInner {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct BlockId(u32);
 
 impl BlockInner {

@@ -1,4 +1,6 @@
-﻿use std::ops::{Add, Mul};
+﻿use crate::math::direction::Axis;
+use bitvec::macros::internal::funty::Floating;
+use std::ops::{Add, Mul};
 
 pub mod angle;
 pub mod block_pos;
@@ -105,5 +107,108 @@ impl<M: Mul<f32, Output = Self> + Add<Output = Self> + Copy> Lerp for M {
         let now = *self * t;
         let prev = other * (1.0 - t);
         now + prev
+    }
+}
+
+pub trait Vector3 {
+    type T;
+
+    #[must_use]
+    fn x(&self) -> Self::T;
+
+    #[must_use]
+    fn y(&self) -> Self::T;
+
+    #[must_use]
+    fn z(&self) -> Self::T;
+
+    #[must_use]
+    fn x_mut(&mut self) -> &mut Self::T;
+
+    #[must_use]
+    fn y_mut(&mut self) -> &mut Self::T;
+
+    #[must_use]
+    fn z_mut(&mut self) -> &mut Self::T;
+
+    fn get(&self, axis: Axis) -> Self::T {
+        match axis {
+            Axis::X => self.x(),
+            Axis::Y => self.y(),
+            Axis::Z => self.z(),
+        }
+    }
+
+    fn get_mut(&mut self, axis: Axis) -> &mut Self::T {
+        match axis {
+            Axis::X => self.x_mut(),
+            Axis::Y => self.y_mut(),
+            Axis::Z => self.z_mut(),
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! impl_vec3 {
+    ($ty:ty: $c:ty => $acc:tt $x:ident $y:ident $z:ident) => {
+        impl Vector3 for $ty {
+            type T = $c;
+
+            #[inline]
+            fn x(&self) -> Self::T {
+                self.$acc.$x
+            }
+
+            #[inline]
+            fn y(&self) -> Self::T {
+                self.$acc.$y
+            }
+
+            #[inline]
+            fn z(&self) -> Self::T {
+                self.$acc.$z
+            }
+
+            #[inline]
+            fn x_mut(&mut self) -> &mut Self::T {
+                &mut self.$acc.$x
+            }
+
+            #[inline]
+            fn y_mut(&mut self) -> &mut Self::T {
+                &mut self.$acc.$y
+            }
+
+            #[inline]
+            fn z_mut(&mut self) -> &mut Self::T {
+                &mut self.$acc.$z
+            }
+        }
+    };
+}
+
+pub trait MinMax {
+    fn min(self, other: Self) -> Self;
+
+    fn max(self, other: Self) -> Self;
+}
+
+// impl<T: Ord + Sized> MinMax for T {
+//     fn min(self, other: Self) -> Self {
+//         self.min(other)
+//     }
+//
+//     fn max(self, other: Self) -> Self {
+//         self.max(other)
+//     }
+// }
+
+impl MinMax for f32 {
+    fn min(self, other: Self) -> Self {
+        self.min(other)
+    }
+
+    fn max(self, other: Self) -> Self {
+        self.max(other)
     }
 }

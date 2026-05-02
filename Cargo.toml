@@ -25,6 +25,7 @@ rustc-hash = "2.1.2"
 static_init = "1.0.4"
 itertools = "0.14.0"
 bitvec = "1.0.1"
+enum-iterator = "2.3.0"
 
 [profile.dev]
 opt-level = 1

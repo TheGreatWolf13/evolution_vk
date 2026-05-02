@@ -5,10 +5,10 @@ use crate::client::engine::pipeline::{Pipeline, PipelineConsumer};
 use crate::client::engine::swapchain::SwapChain;
 use crate::client::input::InputHandler;
 use crate::client::mesh::Mesh;
+use crate::client::texture::TextureManager;
 use crate::client::vertex::{VertexFormat, VertexPosCol, VertexPosTex};
 use crate::if_else;
 use log::{error, info};
-use std::env::current_dir;
 use std::sync::Arc;
 use std::time::Instant;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
@@ -55,7 +55,7 @@ pub struct GraphicsEngine {
 }
 
 impl GraphicsEngine {
-    pub fn new(event_loop: &ActiveEventLoop) -> Self {
+    pub fn new(event_loop: &ActiveEventLoop, texture_manager: &TextureManager) -> Self {
         let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
         let window = Arc::new(event_loop.create_window(WindowAttributes::default().with_title("Evolution VK")).unwrap());
         let required_extensions = Surface::required_extensions(&window);
@@ -103,7 +103,7 @@ impl GraphicsEngine {
         let ds_allocator = Arc::new(StandardDescriptorSetAllocator::new(device.clone(), StandardDescriptorSetAllocatorCreateInfo::default()));
         let tex_pipeline = {
             let texture = {
-                let image = image::open(current_dir().unwrap().join("res/assets/textures/block/cobblestone.png")).unwrap().to_rgba8();
+                let image = texture_manager.get_atlas_image();
                 let width = image.width();
                 let height = image.height();
                 let extent = [width, height, 1];

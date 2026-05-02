@@ -42,11 +42,11 @@ pub(super) struct UVConstructor {
 
 impl UVConstructor {
     pub fn get_uv(&self, id: TextureId, info: RawTextureInfo) -> TextureInfo {
-        TextureInfo {
+        TextureInfo::new(
             id,
-            uv0: Vec2::new(info.0.x() as f32 / self.size.x() as f32, info.0.y() as f32 / self.size.y() as f32),
-            uv1: Vec2::new(info.1.x() as f32 / self.size.x() as f32, info.1.y() as f32 / self.size.y() as f32),
-        }
+            Vec2::new(info.0.x() as f32 / self.size.x() as f32, info.0.y() as f32 / self.size.y() as f32),
+            Vec2::new(info.1.x() as f32 / self.size.x() as f32, info.1.y() as f32 / self.size.y() as f32),
+        )
     }
 
     pub fn get_size(&self) -> UVec2 {

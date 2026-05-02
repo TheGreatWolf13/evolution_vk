@@ -1,4 +1,7 @@
-﻿use crate::client::vertex::{Transform, Vertex, VertexFormat, VertexPosTex};
+﻿use crate::client::model::BakedModel;
+use crate::client::vertex::{Transform, Vertex, VertexFormat, VertexPosTex};
+use crate::math::direction::Direction;
+use enum_iterator::all;
 use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
@@ -109,40 +112,54 @@ impl MeshBuilder<VertexPosTex> {
         self.index_buffer.reserve(6 * 6);
         self.quad([
             //Down
-            Vertex::new().pos(x, y, z).uv(0.0, 1.0),
-            Vertex::new().pos(x + 1.0, y, z).uv(1.0, 1.0),
-            Vertex::new().pos(x + 1.0, y, z + 1.0).uv(1.0, 0.0),
-            Vertex::new().pos(x, y, z + 1.0).uv(0.0, 0.0),
+            Vertex::new().pos((x, y, z)).uv((0.0, 1.0)),
+            Vertex::new().pos((x + 1.0, y, z)).uv((1.0, 1.0)),
+            Vertex::new().pos((x + 1.0, y, z + 1.0)).uv((1.0, 0.0)),
+            Vertex::new().pos((x, y, z + 1.0)).uv((0.0, 0.0)),
         ]).quad([
             //Up
-            Vertex::new().pos(x, y + 1.0, z).uv(0.0, 0.0),
-            Vertex::new().pos(x, y + 1.0, z + 1.0).uv(0.0, 1.0),
-            Vertex::new().pos(x + 1.0, y + 1.0, z + 1.0).uv(1.0, 1.0),
-            Vertex::new().pos(x + 1.0, y + 1.0, z).uv(1.0, 0.0),
+            Vertex::new().pos((x, y + 1.0, z)).uv((0.0, 0.0)),
+            Vertex::new().pos((x, y + 1.0, z + 1.0)).uv((0.0, 1.0)),
+            Vertex::new().pos((x + 1.0, y + 1.0, z + 1.0)).uv((1.0, 1.0)),
+            Vertex::new().pos((x + 1.0, y + 1.0, z)).uv((1.0, 0.0)),
         ]).quad([
             //South
-            Vertex::new().pos(x, y, z + 1.0).uv(0.0, 1.0),
-            Vertex::new().pos(x + 1.0, y, z + 1.0).uv(1.0, 1.0),
-            Vertex::new().pos(x + 1.0, y + 1.0, z + 1.0).uv(1.0, 0.0),
-            Vertex::new().pos(x, y + 1.0, z + 1.0).uv(0.0, 0.0),
+            Vertex::new().pos((x, y, z + 1.0)).uv((0.0, 1.0)),
+            Vertex::new().pos((x + 1.0, y, z + 1.0)).uv((1.0, 1.0)),
+            Vertex::new().pos((x + 1.0, y + 1.0, z + 1.0)).uv((1.0, 0.0)),
+            Vertex::new().pos((x, y + 1.0, z + 1.0)).uv((0.0, 0.0)),
         ]).quad([
             //North
-            Vertex::new().pos(x + 1.0, y, z).uv(0.0, 1.0),
-            Vertex::new().pos(x, y, z).uv(1.0, 1.0),
-            Vertex::new().pos(x, y + 1.0, z).uv(1.0, 0.0),
-            Vertex::new().pos(x + 1.0, y + 1.0, z).uv(0.0, 0.0),
+            Vertex::new().pos((x + 1.0, y, z)).uv((0.0, 1.0)),
+            Vertex::new().pos((x, y, z)).uv((1.0, 1.0)),
+            Vertex::new().pos((x, y + 1.0, z)).uv((1.0, 0.0)),
+            Vertex::new().pos((x + 1.0, y + 1.0, z)).uv((0.0, 0.0)),
         ]).quad([
             //East
-            Vertex::new().pos(x + 1.0, y, z + 1.0).uv(0.0, 1.0),
-            Vertex::new().pos(x + 1.0, y, z).uv(1.0, 1.0),
-            Vertex::new().pos(x + 1.0, y + 1.0, z).uv(1.0, 0.0),
-            Vertex::new().pos(x + 1.0, y + 1.0, z + 1.0).uv(0.0, 0.0),
+            Vertex::new().pos((x + 1.0, y, z + 1.0)).uv((0.0, 1.0)),
+            Vertex::new().pos((x + 1.0, y, z)).uv((1.0, 1.0)),
+            Vertex::new().pos((x + 1.0, y + 1.0, z)).uv((1.0, 0.0)),
+            Vertex::new().pos((x + 1.0, y + 1.0, z + 1.0)).uv((0.0, 0.0)),
         ]).quad([
             //West
-            Vertex::new().pos(x, y, z).uv(0.0, 1.0),
-            Vertex::new().pos(x, y, z + 1.0).uv(1.0, 1.0),
-            Vertex::new().pos(x, y + 1.0, z + 1.0).uv(1.0, 0.0),
-            Vertex::new().pos(x, y + 1.0, z).uv(0.0, 0.0),
+            Vertex::new().pos((x, y, z)).uv((0.0, 1.0)),
+            Vertex::new().pos((x, y, z + 1.0)).uv((1.0, 1.0)),
+            Vertex::new().pos((x, y + 1.0, z + 1.0)).uv((1.0, 0.0)),
+            Vertex::new().pos((x, y + 1.0, z)).uv((0.0, 0.0)),
         ])
+    }
+
+    pub fn model(mut self, model: &BakedModel) -> Self {
+        let last_index = self.vertex_buffer.len() as u32;
+        let data = model.get_data(None);
+        self.index_buffer.extend(data.1.iter().map(|i| i + last_index));
+        self.vertex_buffer.extend(data.0.iter().map(|v| v.transform(self.local_transform)));
+        for dir in all::<Direction>() {
+            let last_index = self.vertex_buffer.len() as u32;
+            let data = model.get_data(Some(dir));
+            self.index_buffer.extend(data.1.iter().map(|i| i + last_index));
+            self.vertex_buffer.extend(data.0.iter().map(|v| v.transform(self.local_transform)));
+        }
+        self
     }
 }

@@ -6,7 +6,7 @@ use crate::client::camera::Camera;
 use crate::client::engine::GraphicsEngine;
 use crate::client::input::Input;
 use crate::client::mesh::{Mesh, MeshBuilder};
-use crate::client::texture::TextureManager;
+use crate::client::resources::ResourceManager;
 use crate::client::vertex::{Vertex, VertexPosCol};
 use crate::math::chunk_pos::ChunkPos;
 use crate::math::mat4::Mat4;
@@ -20,10 +20,10 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::WindowId;
 
 mod block;
+mod chunk;
 mod client;
 mod math;
 mod util;
-mod chunk;
 
 enum Game {
     Uninit,
@@ -37,7 +37,7 @@ struct GameData {
     timer: Timer,
     col_meshes: Vec<Mesh<VertexPosCol>>,
     chunk: Chunk<4>,
-    texture_manager: TextureManager,
+    resource_manager: ResourceManager,
 }
 
 impl ApplicationHandler for Game {
@@ -45,10 +45,11 @@ impl ApplicationHandler for Game {
         match cause {
             StartCause::Init => {
                 info!("Init");
-                let vc1 = Vertex::new().pos(1.0, 0.0, -1.0).color(1.0, 0.0, 0.0);
-                let vc2 = Vertex::new().pos(1.0, 1.0, -1.0).color(0.0, 1.0, 0.0);
-                let vc3 = Vertex::new().pos(0.0, 1.0, -1.0).color(0.0, 0.0, 1.0);
-                let engine = GraphicsEngine::new(&event_loop);
+                let vc1 = Vertex::new().pos((1.0, 0.0, -1.0)).color(1.0, 0.0, 0.0);
+                let vc2 = Vertex::new().pos((1.0, 1.0, -1.0)).color(0.0, 1.0, 0.0);
+                let vc3 = Vertex::new().pos((0.0, 1.0, -1.0)).color(0.0, 0.0, 1.0);
+                let resource_manager = ResourceManager::new();
+                let engine = GraphicsEngine::new(&event_loop, &resource_manager.get_texture_manager());
                 let allocator = engine.get_allocator().clone();
                 let chunk = Chunk::new(ChunkPos::new(0, 0));
                 *self = Game::Init(GameData {
@@ -60,7 +61,7 @@ impl ApplicationHandler for Game {
                         MeshBuilder::new(Mat4::IDENTITY).triangle([vc1, vc2, vc3]).build(allocator.clone()).unwrap(),
                     ],
                     chunk,
-                    texture_manager: TextureManager::new(),
+                    resource_manager,
                 });
                 event_loop.set_control_flow(ControlFlow::Poll);
             }
@@ -131,7 +132,7 @@ impl ApplicationHandler for Game {
                     data.timer.try_frame(|partial_tick| {
                         let engine = &mut data.graphics;
                         let pos = data.chunk.get_pos();
-                        data.chunk.get_sections_mut().iter_mut().for_each(|s| s.remesh(pos, engine.get_allocator().clone()));
+                        data.chunk.get_sections_mut().iter_mut().for_each(|s| s.remesh(pos, data.resource_manager.get_model_manager(), engine.get_allocator().clone()));
                         data.camera.adjust(engine.get_window().inner_size(), partial_tick);
                         engine.update_fps();
                         engine.resize_or_update_swapchain();
@@ -171,7 +172,7 @@ impl ApplicationHandler for Game {
 fn main() {
     unsafe {
         //SAFETY: called from a single threaded environment
-        std::env::set_var("RUST_LOG", "info");
+        std::env::set_var("RUST_LOG", "debug");
     }
     env_logger::builder().format_source_path(true).format_target(false).init();
     info!("Initializing Evolution VK");
