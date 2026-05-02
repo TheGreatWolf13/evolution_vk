@@ -1,6 +1,8 @@
 ﻿use crate::chunk::Section;
+use crate::math::direction::{Axis, Direction};
 use crate::math::i8vec3::I8Vec3;
 use crate::math::Vector3;
+use enum_iterator::all;
 use light_ranged_integers::RangedI8;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
@@ -39,5 +41,18 @@ impl LocalSectionPos {
     #[must_use]
     pub fn z(&self) -> i8 {
         self.0.z()
+    }
+
+    pub fn offset(&self, dir: Direction) -> Self {
+        Self(self.0 + dir.get_offset().map(|c| c as i8))
+    }
+
+    pub fn is_out_of_range(&self) -> bool {
+        for axis in all::<Axis>() {
+            if self.0.get(axis) < 0 || self.0.get(axis) >= Section::SIZE {
+                return true;
+            }
+        }
+        false
     }
 }

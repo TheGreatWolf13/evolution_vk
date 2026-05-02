@@ -146,6 +146,10 @@ pub trait Vector3 {
             Axis::Z => self.z_mut(),
         }
     }
+
+    fn map<S>(&self, f: impl Fn(Self::T) -> S) -> (S, S, S) {
+        (f(self.x()), f(self.y()), f(self.z()))
+    }
 }
 
 #[macro_export]

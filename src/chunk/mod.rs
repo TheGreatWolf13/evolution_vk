@@ -3,9 +3,13 @@ use crate::client::mesh::{Mesh, MeshBuilder};
 use crate::client::model::ModelManager;
 use crate::client::vertex::VertexPosTex;
 use crate::math::chunk_pos::ChunkPos;
+use crate::math::direction::Direction;
 use crate::math::local_section_pos::LocalSectionPos;
 use crate::math::mat4::Mat4;
 use crate::{if_else, Block};
+use bitvec::order::Lsb0;
+use bitvec::vec::BitVec;
+use enum_iterator::all;
 use itertools::Itertools;
 use std::sync::Arc;
 use vulkano::memory::allocator::StandardMemoryAllocator;
@@ -41,7 +45,17 @@ impl Section {
                         let pos = LocalSectionPos::new(x.into(), y.into(), z.into());
                         let block = self.blocks.get_block_at(pos);
                         if block != Block!(AIR) {
-                            builder = builder.local_transform(Mat4::from_translation((x as f32, y as f32, z as f32))).model(model_manager.get_model(block));
+                            let mut faces = BitVec::<usize, Lsb0>::new();
+                            for dir in all::<Direction>() {
+                                let neighbour_pos = pos.offset(dir);
+                                if neighbour_pos.is_out_of_range() || self.blocks.get_block_at(neighbour_pos) == Block!(AIR) {
+                                    faces.push(true);
+                                } //
+                                else {
+                                    faces.push(false);
+                                }
+                            }
+                            builder = builder.local_transform(Mat4::from_translation((x as f32, y as f32, z as f32))).model(model_manager.get_model(block), faces);
                         }
                     }
                 }
