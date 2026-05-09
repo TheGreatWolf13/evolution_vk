@@ -38,7 +38,7 @@ impl Input {
     }
 
     pub fn tick(&mut self, camera: &mut Camera, handler: &mut impl InputHandler) {
-        const SPEED: f32 = 0.025;
+        const SPEED: f32 = 0.1;
         const SENSITIVITY: f32 = 0.25;
         let mut forward = if_else!(self.bindings[BindingType::MoveBackward].is_down_and_reset() => 1.0 ; 0.0);
         forward += if_else!(self.bindings[BindingType::MoveForward].is_down_and_reset() => -1.0 ; 0.0);

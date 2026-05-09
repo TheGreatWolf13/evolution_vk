@@ -1,4 +1,4 @@
-﻿use crate::chunk::Section;
+﻿use crate::level::chunk::Section;
 use crate::math::ivec3::IVec3;
 use crate::math::local_section_pos::{LocalSectionPos, Range};
 use crate::math::Vector3;

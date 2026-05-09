@@ -324,7 +324,7 @@ impl GraphicsEngine {
         }
     }
 
-    pub fn swap_buffers<'a, 'b>(&mut self, tex: (<VertexPosTex as VertexFormat>::Uniform, impl IntoIterator<Item = &'a Mesh<VertexPosTex>>), col: (<VertexPosCol as VertexFormat>::Uniform, impl IntoIterator<Item = &'b Mesh<VertexPosCol>>)) {
+    pub fn swap_buffers<'a, 'b>(&mut self, tex: (<VertexPosTex as VertexFormat>::Uniform, impl IntoIterator<Item = &'a Mesh<VertexPosTex>>)) {
         self.swapchain.swap_buffers(|swapchain, acquire_future, framebuffer, present_info| {
             let mut builder = AutoCommandBufferBuilder::primary(&self.cb_allocator, self.queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
             builder
@@ -345,15 +345,12 @@ impl GraphicsEngine {
                 .unwrap()
                 .render(&self.tex_pipeline, swapchain, tex.1)
                 .unwrap()
-                .render(&self.col_pipeline, swapchain, col.1)
-                .unwrap()
                 .end_render_pass(Default::default())
                 .unwrap();
             let command_buffer = builder.build().unwrap();
             acquire_future.wait(None).unwrap();
             self.previous_frame_end.as_mut().unwrap().cleanup_finished();
             self.tex_pipeline.write_uniform(tex.0, swapchain);
-            self.col_pipeline.write_uniform(col.0, swapchain);
             let future = self.previous_frame_end
                              .take()
                              .unwrap()

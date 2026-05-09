@@ -2,7 +2,7 @@
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct ChunkPos(IVec2);
 
 impl Debug for ChunkPos {

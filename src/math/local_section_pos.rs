@@ -1,4 +1,4 @@
-﻿use crate::chunk::Section;
+﻿use crate::level::chunk::Section;
 use crate::math::direction::{Axis, Direction};
 use crate::math::i8vec3::I8Vec3;
 use crate::math::Vector3;

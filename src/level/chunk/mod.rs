@@ -1,7 +1,7 @@
-﻿use crate::chunk::palette::BlockPallet;
-use crate::client::mesh::{Mesh, MeshBuilder};
+﻿use crate::client::mesh::{Mesh, MeshBuilder};
 use crate::client::model::ModelManager;
 use crate::client::vertex::VertexPosTex;
+use crate::level::chunk::palette::BlockPallet;
 use crate::math::chunk_pos::ChunkPos;
 use crate::math::direction::Direction;
 use crate::math::local_section_pos::LocalSectionPos;
@@ -36,9 +36,9 @@ impl Section {
         self.mesh.as_ref()
     }
 
-    pub fn remesh(&mut self, pos: ChunkPos, model_manager: &ModelManager, allocator: Arc<StandardMemoryAllocator>) {
+    pub fn remesh(&mut self, pos: ChunkPos, min_y_section: i8, model_manager: &ModelManager, allocator: Arc<StandardMemoryAllocator>) {
         if self.dirty {
-            let mut builder = MeshBuilder::new(Mat4::from_translation((pos.x() as f32 * Section::SIZE as f32, self.index as f32 * Section::SIZE as f32, pos.z() as f32 * Section::SIZE as f32)));
+            let mut builder = MeshBuilder::new(Mat4::from_translation((pos.x() as f32 * Section::SIZE as f32, (self.index as i32 + min_y_section as i32) as f32 * Section::SIZE as f32, pos.z() as f32 * Section::SIZE as f32)));
             for x in 0..Self::SIZE {
                 for y in 0..Self::SIZE {
                     for z in 0..Self::SIZE {

@@ -6,7 +6,7 @@ use std::ops::MulAssign;
 use std::ops::{Add, Sub};
 use std::ops::{Mul, Neg, SubAssign};
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct IVec2(pub(super) V);
 
 type P = i32;
