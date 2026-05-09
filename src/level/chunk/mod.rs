@@ -6,7 +6,7 @@ use crate::math::chunk_pos::ChunkPos;
 use crate::math::direction::Direction;
 use crate::math::local_section_pos::LocalSectionPos;
 use crate::math::mat4::Mat4;
-use crate::{if_else, Block};
+use crate::Block;
 use bitvec::order::Lsb0;
 use bitvec::vec::BitVec;
 use enum_iterator::all;
@@ -73,7 +73,12 @@ impl<const Y: usize> Chunk<Y> {
             sections: (0..Y).map(|i| {
                 Section {
                     index: i as u8,
-                    blocks: BlockPallet::from_single(if_else!(i < Y / 4 => Block!(STONE) ; if_else!(i < Y / 2 => Block!(DIRT) ; Block!(AIR)))),
+                    blocks: BlockPallet::from_single(match i {
+                        0 | 1 => Block!(COBBLESTONE),
+                        2 => Block!(STONE),
+                        3 => Block!(DIRT),
+                        _ => Block!(AIR),
+                    }),
                     mesh: None,
                     dirty: true,
                 }
