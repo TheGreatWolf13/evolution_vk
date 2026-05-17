@@ -36,7 +36,8 @@ use winit::window::{CursorGrabMode, Window, WindowAttributes};
 pub struct GraphicsEngine {
     window: Arc<Window>,
     device: Arc<Device>,
-    queue: Arc<Queue>,
+    graphics_queue: Arc<Queue>,
+    transfer_queue: Arc<Queue>,
     memory_allocator: Arc<StandardMemoryAllocator>,
     cb_allocator: StandardCommandBufferAllocator,
     render_pass: Arc<RenderPass>,
@@ -72,24 +73,50 @@ impl GraphicsEngine {
             khr_swapchain: true,
             ..DeviceExtensions::empty()
         };
-        let (physical_device, queue_family_index) = Self::select_physical_device(&instance, &surface, &device_extensions);
-        let (device, mut queues) = Device::new(
-            physical_device.clone(),
-            DeviceCreateInfo {
-                queue_create_infos: vec![QueueCreateInfo {
-                    queue_family_index,
-                    ..Default::default()
-                }],
-                enabled_extensions: device_extensions,
-                enabled_features: Features {
-                    fill_mode_non_solid: true,
-                    ..Features::empty()
-                },
+        let (physical_device, graphics_family_index) = Self::select_physical_device(&instance, &surface, &device_extensions);
+        let transfer_family_index = physical_device
+            .queue_family_properties()
+            .iter()
+            .enumerate()
+            .filter(|(_, q)| q.queue_flags.intersects(QueueFlags::TRANSFER))
+            .min_by_key(|(_, q)| q.queue_flags.count())
+            .map(|(i, _)| i as u32);
+        let (device, mut queues) = {
+            let mut queue_create_infos = vec![QueueCreateInfo {
+                queue_family_index: graphics_family_index,
                 ..Default::default()
-            },
-        ).expect("failed to create device");
+            }];
+            if let Some(transfer_family_index) = transfer_family_index && transfer_family_index != graphics_family_index {
+                info!("found transfer");
+                queue_create_infos.push(QueueCreateInfo {
+                    queue_family_index: transfer_family_index,
+                    ..Default::default()
+                })
+            } //
+            else {
+                let queue_family_properties = &physical_device.queue_family_properties()[graphics_family_index as usize];
+                info!("two graphics");
+                if queue_family_properties.queue_count > 1 {
+                    queue_create_infos[0].queues = vec![0.5, 0.5];
+                }
+            }
+            Device::new(
+                physical_device.clone(),
+                DeviceCreateInfo {
+                    queue_create_infos,
+                    enabled_extensions: device_extensions,
+                    enabled_features: Features {
+                        fill_mode_non_solid: true,
+                        ..Features::empty()
+                    },
+                    ..Default::default()
+                },
+            ).expect("failed to create device")
+        };
         let window_size = window.inner_size();
-        let queue = queues.next().unwrap();
+        let graphics_queue = queues.next().unwrap();
+        let transfer_queue = queues.next().unwrap_or_else(|| graphics_queue.clone());
+        info!("Using queue family {} / {:?} for graphics and queue family {} / {:?} for transfers", graphics_queue.queue_family_index(), graphics_queue, transfer_queue.queue_family_index(), transfer_queue);
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         let image_format = physical_device.surface_formats(&surface, Default::default()).unwrap()[0].0;
         let render_pass = Self::get_render_pass(device.clone(), image_format);
@@ -97,7 +124,7 @@ impl GraphicsEngine {
         let cb_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
         let mut uploader = AutoCommandBufferBuilder::primary(
             &cb_allocator,
-            queue.queue_family_index(),
+            graphics_queue.queue_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         ).unwrap();
         let ds_allocator = Arc::new(StandardDescriptorSetAllocator::new(device.clone(), StandardDescriptorSetAllocatorCreateInfo::default()));
@@ -186,7 +213,8 @@ impl GraphicsEngine {
         Self {
             window,
             device: device.clone(),
-            queue: queue.clone(),
+            graphics_queue: graphics_queue.clone(),
+            transfer_queue,
             memory_allocator,
             cb_allocator,
             swapchain,
@@ -194,7 +222,7 @@ impl GraphicsEngine {
             col_pipeline,
             render_pass,
             viewport,
-            previous_frame_end: Some(uploader.build().unwrap().execute(queue).unwrap().boxed()),
+            previous_frame_end: Some(uploader.build().unwrap().execute(graphics_queue).unwrap().boxed()),
             window_resized: false,
             last_frame: Instant::now(),
             frames: 0,
@@ -326,7 +354,7 @@ impl GraphicsEngine {
 
     pub fn swap_buffers<'a, 'b>(&mut self, tex: (<VertexPosTex as VertexFormat>::Uniform, impl IntoIterator<Item = &'a Mesh<VertexPosTex>>)) {
         self.swapchain.swap_buffers(|swapchain, acquire_future, framebuffer, present_info| {
-            let mut builder = AutoCommandBufferBuilder::primary(&self.cb_allocator, self.queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
+            let mut builder = AutoCommandBufferBuilder::primary(&self.cb_allocator, self.graphics_queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
             builder
                 .begin_render_pass(
                     RenderPassBeginInfo {
@@ -355,9 +383,9 @@ impl GraphicsEngine {
                              .take()
                              .unwrap()
                              .join(acquire_future)
-                             .then_execute(self.queue.clone(), command_buffer)
+                             .then_execute(self.graphics_queue.clone(), command_buffer)
                              .unwrap()
-                             .then_swapchain_present(self.queue.clone(), present_info)
+                             .then_swapchain_present(self.graphics_queue.clone(), present_info)
                              .then_signal_fence_and_flush();
             match future.map_err(Validated::unwrap) {
                 Ok(future) => {
