@@ -16,6 +16,7 @@ use crate::client::texture::TextureManager;
 use crate::client::vertex::VertexPosTex;
 use crate::if_else;
 use crate::level::Level;
+use crate::math::mat4::Mat4;
 use crate::math::vec3::Vec3;
 use crate::math::Vector3;
 use log::{error, info};
@@ -23,7 +24,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, BlitImageInfo, CommandBufferUsage, CopyBufferToImageInfo, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, BlitImageInfo, CommandBufferUsage, CopyBufferToImageInfo, DrawIndexedIndirectCommand, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents};
 use vulkano::descriptor_set::allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo};
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
@@ -217,12 +218,12 @@ impl GraphicsEngine {
                         WriteDescriptorSet::sampler(1, sampler.clone()),
                         WriteDescriptorSet::image_view(2, texture.clone()),
                     ]
-                }/*,
+                },
                 |buffer| {
                     [
                         WriteDescriptorSet::buffer(0, buffer.clone()),
                     ]
-                }*/,
+                },
             )
         };
         let viewport = Viewport {
@@ -409,12 +410,13 @@ impl GraphicsEngine {
                 ).unwrap()
                 .set_viewport(0, [self.viewport.clone()].into_iter().collect())
                 .unwrap();
-            self.render_level(&mut cb, level);
+            let transforms = self.render_level(&mut cb, level);
             cb.end_render_pass(Default::default()).unwrap();
             let cb = cb.build().unwrap();
             acquire_future.wait(None).unwrap();
             self.exec_future.cleanup_finished();
             self.terrain_pipeline.write_uniform(camera.get_uniform(), &self.swapchain);
+            self.terrain_pipeline.write_storate(transforms, &self.swapchain);
             let future = self.exec_future
                              .join_future(acquire_future)
                              .then_execute(cb, &self.graphics_queue)
@@ -434,20 +436,46 @@ impl GraphicsEngine {
         }
     }
 
-    fn render_level<const Y: usize>(&mut self, cb: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>, level: &Level<Y>) {
-        cb
-            .bind_pipeline(&self.terrain_pipeline, &self.swapchain).unwrap()
-            .bind_buffers(&self.section_buffers).unwrap();
+    fn render_level<const Y: usize>(&mut self, cb: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>, level: &Level<Y>) -> Vec<Mat4> {
         let min_y_section = level.get_min_y_section();
+        let mut transforms = vec![];
+        let mut draw_commands = vec![];
+        let mut i = 0;
         level.get_chunks().for_each(|(pos, chunk)| {
             chunk.get_sections().iter().for_each(|section| {
                 if let Some(region) = section.get_mesh_region() {
-                    cb
-                        .push_constant(&self.terrain_pipeline, section.get_transform(section.get_pos(*pos, min_y_section))).unwrap()
-                        .draw_indexed(region.get_index_count(), 1, region.get_index_start(), region.get_vertex_start() as i32, 0).unwrap();
+                    transforms.push(section.get_transform(section.get_pos(*pos, min_y_section)));
+                    draw_commands.push(DrawIndexedIndirectCommand {
+                        first_index: region.get_index_start(),
+                        index_count: region.get_index_count(),
+                        instance_count: 1,
+                        first_instance: i,
+                        vertex_offset: region.get_vertex_start(),
+                    });
+                    i += 1;
                 }
             })
         });
+        if !draw_commands.is_empty() {
+            let indirect_buffer = Buffer::from_iter(
+                self.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::INDIRECT_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                draw_commands,
+            ).unwrap();
+            self.terrain_pipeline.realloc_storage_if_needed(transforms.len(), &self.swapchain, &self.memory_allocator, &self.ds_allocator, |buffer| [WriteDescriptorSet::buffer(0, buffer.clone())]);
+            cb
+                .bind_pipeline(&self.terrain_pipeline, &self.swapchain).unwrap()
+                .bind_buffers(&self.section_buffers).unwrap()
+                .draw_indexed_indirect(indirect_buffer).unwrap();
+        }
+        transforms
     }
 }
 

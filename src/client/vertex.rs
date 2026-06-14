@@ -7,7 +7,7 @@ use vulkano::pipeline::graphics::vertex_input::Vertex as VertexLayout;
 use vulkano::shader::ShaderModule;
 
 pub trait VertexFormat: BufferContents + VertexLayout + Copy + Debug {
-    type PushConstant: BufferContents + Copy;
+    type SSBOType: BufferContents + Copy;
     type Uniform: BufferContents + Copy;
 
     fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>);
@@ -84,7 +84,7 @@ mod vpc {
     use vulkano::shader::ShaderModule;
 
     impl VertexFormat for VertexPosCol {
-        type PushConstant = vs::Transform;
+        type SSBOType = vs::Transform;
         type Uniform = vs::Camera;
 
         fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>) {
@@ -171,7 +171,7 @@ mod vpt {
     use vulkano::shader::ShaderModule;
 
     impl VertexFormat for VertexPosTex {
-        type PushConstant = vs::Transform;
+        type SSBOType = vs::Transform;
         type Uniform = vs::Camera;
 
         fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>) {
@@ -214,17 +214,17 @@ mod vpt {
                     mat4 proj;
                 } camera;
 
-                layout(push_constant) uniform Transform {
-                    mat4 world;
-                } transform;
-
-                //struct Transform {
+                //layout(push_constant) uniform Transform {
                 //    mat4 world;
-                //};
+                //} transform;
 
-                //layout(set = 1, binding = 0) readonly buffer TransformBuffer {
-                //    Transform[] data;
-                //} transforms;
+                struct Transform {
+                    mat4 world;
+                };
+
+                layout(set = 1, binding = 0) readonly buffer TransformBuffer {
+                    Transform[] data;
+                } transforms;
 
                 layout(location = 0) in vec3 pos;
                 layout(location = 1) in vec2 uv;
@@ -232,7 +232,7 @@ mod vpt {
                 layout(location = 0) out vec2 v_uv;
 
                 void main() {
-                    gl_Position = camera.proj * camera.view * transform.world * vec4(pos, 1.0);
+                    gl_Position = camera.proj * camera.view * transforms.data[gl_InstanceIndex].world * vec4(pos, 1.0);
                     v_uv = uv;
                 }
             ",
