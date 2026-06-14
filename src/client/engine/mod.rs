@@ -95,7 +95,7 @@ impl GraphicsEngine {
             .filter(|(_, q)| q.queue_flags.intersects(QueueFlags::TRANSFER))
             .min_by_key(|(_, q)| q.queue_flags.count())
             .map(|(i, _)| i as u32);
-        let (device, mut queues) = {
+        let (device, queues) = {
             let mut queue_create_infos = vec![QueueCreateInfo {
                 queue_family_index: graphics_family_index,
                 ..Default::default()
@@ -160,6 +160,7 @@ impl GraphicsEngine {
                     },
                     image.into_iter().cloned(),
                 ).unwrap();
+                const MIP_LEVELS: u32 = 4;
                 let image = Image::new(
                     memory_allocator.clone(),
                     ImageCreateInfo {
@@ -167,7 +168,7 @@ impl GraphicsEngine {
                         format: Format::R8G8B8A8_SRGB,
                         extent,
                         usage: ImageUsage::TRANSFER_DST | ImageUsage::TRANSFER_SRC | ImageUsage::SAMPLED,
-                        mip_levels: 5,
+                        mip_levels: MIP_LEVELS + 1,
                         ..Default::default()
                     },
                     AllocationCreateInfo::default(),
@@ -175,7 +176,7 @@ impl GraphicsEngine {
                 uploader.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(upload_buffer, image.clone())).unwrap();
                 let mut src_width = width;
                 let mut src_height = height;
-                for i in 0..(5 - 1) {
+                for i in 0..MIP_LEVELS {
                     let dst_width = if_else!(src_width > 1 => src_width / 2 ; 1);
                     let dst_height = if_else!(src_height > 1 => src_height / 2 ; 1);
                     let mut info = BlitImageInfo::images(image.clone(), image.clone());
@@ -265,12 +266,12 @@ impl GraphicsEngine {
             .filter(|p| p.supported_extensions().contains(device_extensions))
             .filter_map(|p| {
                 p.queue_family_properties()
-                    .iter()
-                    .enumerate()
-                    .position(|(i, q)| {
-                        q.queue_flags.contains(QueueFlags::GRAPHICS) && p.surface_support(i as u32, surface).unwrap_or(false)
-                    })
-                    .map(|q| (p, q as u32))
+                 .iter()
+                 .enumerate()
+                 .position(|(i, q)| {
+                     q.queue_flags.contains(QueueFlags::GRAPHICS) && p.surface_support(i as u32, surface).unwrap_or(false)
+                 })
+                 .map(|q| (p, q as u32))
             })
             .min_by_key(|(p, _)| {
                 match p.properties().device_type {
@@ -418,10 +419,10 @@ impl GraphicsEngine {
             self.exec_future.cleanup_finished();
             self.terrain_pipeline.write_uniform(camera.get_uniform(), &self.swapchain);
             let future = self.exec_future
-                .join_future(acquire_future)
-                .then_execute(cb, &self.graphics_queue)
-                .then_swapchain_present(present_info, &self.graphics_queue)
-                .then_signal_fence_and_flush();
+                             .join_future(acquire_future)
+                             .then_execute(cb, &self.graphics_queue)
+                             .then_swapchain_present(present_info, &self.graphics_queue)
+                             .then_signal_fence_and_flush();
             match future.map_err(Validated::unwrap) {
                 Ok(()) => (),
                 Err(VulkanError::OutOfDate) => {

@@ -97,8 +97,8 @@ impl<V: VertexFormat> SectionBuffers<V> {
     }
 
     pub(super) fn reallocate_if_needed(&mut self, allocator: &Arc<StandardMemoryAllocator>, cb_allocator: &StandardCommandBufferAllocator, queue: &Queue, exec_future: &mut ExecutionFuture) {
-        self.vertex_buffer.realloc_buffer(allocator, cb_allocator, queue, exec_future);
-        self.index_buffer.realloc_buffer(allocator, cb_allocator, queue, exec_future);
+        self.vertex_buffer.realloc_buffer_if_needed(allocator, cb_allocator, queue, exec_future);
+        self.index_buffer.realloc_buffer_if_needed(allocator, cb_allocator, queue, exec_future);
     }
 }
 
@@ -168,7 +168,7 @@ impl<T: BufferContents + Debug> GlobalBuffer<T> {
         todo!()
     }
 
-    fn realloc_buffer(&mut self, allocator: &Arc<StandardMemoryAllocator>, cb_allocator: &StandardCommandBufferAllocator, queue: &Queue, exec_future: &mut ExecutionFuture) {
+    fn realloc_buffer_if_needed(&mut self, allocator: &Arc<StandardMemoryAllocator>, cb_allocator: &StandardCommandBufferAllocator, queue: &Queue, exec_future: &mut ExecutionFuture) {
         if self.capacity as DeviceSize != self.buffer.len() {
             let new_buffer = Buffer::new_slice(
                 allocator.clone(),
@@ -194,18 +194,18 @@ impl<T: BufferContents + Debug> GlobalBuffer<T> {
         }
     }
 
-    fn copy<I: IntoIterator<Item=T, IntoIter: ExactSizeIterator>>(&mut self, data: I, region: &BufferRegion, allocator: &Arc<StandardMemoryAllocator>, uploader: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) -> usize {
+    fn copy<I: IntoIterator<Item = T, IntoIter: ExactSizeIterator>>(&mut self, data: I, region: &BufferRegion, allocator: &Arc<StandardMemoryAllocator>, uploader: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) -> usize {
         let it = data.into_iter();
         let len = it.len();
         let vec = it.collect::<Vec<_>>();
         let upload_buffer = Buffer::from_iter(
             allocator.clone(),
             BufferCreateInfo {
-                usage: self.buffer.buffer().usage() | BufferUsage::TRANSFER_SRC,
+                usage: BufferUsage::TRANSFER_SRC,
                 ..Default::default()
             },
             AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
             vec,
