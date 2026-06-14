@@ -1,5 +1,5 @@
 ﻿use crate::math::direction::Axis;
-use std::ops::{Add, Mul};
+use std::ops::{Add, Mul, RangeBounds};
 
 pub mod angle;
 pub mod block_pos;
@@ -213,3 +213,37 @@ impl MinMax for f32 {
         self.max(other)
     }
 }
+
+pub trait InRange {
+    type T;
+
+    fn in_range(&self, range: impl RangeBounds<Self::T>) -> bool;
+}
+
+macro_rules! impl_range {
+    ($ty:ty) => {
+        impl InRange for $ty {
+            type T = Self;
+
+            #[inline]
+            fn in_range(&self, range: impl RangeBounds<<Self as InRange>::T>) -> bool {
+                range.contains(&self)
+            }
+        }
+    };
+}
+
+impl_range!(f32);
+impl_range!(f64);
+impl_range!(i8);
+impl_range!(i16);
+impl_range!(i32);
+impl_range!(i64);
+impl_range!(i128);
+impl_range!(u8);
+impl_range!(u16);
+impl_range!(u32);
+impl_range!(u64);
+impl_range!(u128);
+impl_range!(usize);
+impl_range!(isize);
