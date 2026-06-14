@@ -1,23 +1,18 @@
-﻿use crate::level::chunk::Section;
-use crate::math::ivec3::IVec3;
-use crate::math::local_section_pos::{LocalSectionPos, Range};
-use crate::math::Vector3;
-use std::fmt;
+﻿use std::fmt;
 use std::fmt::{Debug, Formatter};
-use crate::impl_from;
+use crate::math::ivec3::IVec3;
+use crate::math::Vector3;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub struct BlockPos(IVec3);
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+pub struct SectionPos(IVec3);
 
-impl Debug for BlockPos {
+impl Debug for SectionPos {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&format!("BlockPos({:?}, {:?}, {:?})", self.x(), self.y(), self.z()))
+        f.write_str(&format!("SectionPos({:?}, {:?}, {:?})", self.x(), self.y(), self.z()))
     }
 }
 
-impl_from!(BlockPos as IVec3: pos => pos.0);
-
-impl BlockPos {
+impl SectionPos {
     #[inline(always)]
     #[must_use]
     pub fn new(x: i32, y: i32, z: i32) -> Self {
@@ -58,11 +53,5 @@ impl BlockPos {
     #[must_use]
     pub fn z_mut(&mut self) -> &mut i32 {
         self.0.z_mut()
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub fn get_local_pos(&self) -> LocalSectionPos {
-        LocalSectionPos::new(Range::new((self.x() & Section::MASK as i32) as i8), Range::new((self.y() & Section::MASK as i32) as i8), Range::new((self.z() & Section::MASK as i32) as i8))
     }
 }

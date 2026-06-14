@@ -5,13 +5,16 @@ use bitvec::vec::BitVec;
 use std::collections::HashMap;
 use std::ops::Index;
 
+#[derive(Debug)]
 pub struct BlockPallet(Palette<Block>);
 
+#[derive(Debug)]
 enum Palette<T> {
     Single(T),
     Multi(IndexedMultiMap<T>, BitVec),
 }
 
+#[derive(Debug)]
 struct IndexedMultiMap<T> {
     bits_per_block: u8,
     index_to_t: Vec<T>,

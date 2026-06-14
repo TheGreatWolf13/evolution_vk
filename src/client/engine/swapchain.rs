@@ -27,6 +27,10 @@ impl<T> FrameVec<T> {
     pub fn create_new_attached<U>(&self, f: impl FnMut(&T) -> U) -> FrameVec<U> {
         FrameVec(self.0.iter().map(f).collect::<Vec<_>>())
     }
+    
+    pub fn get_data_sample<R>(&self, f: impl Fn(&T) -> R) -> R {
+        f(&self.0[0])
+    }
 }
 
 impl SwapChain {
@@ -55,12 +59,12 @@ impl SwapChain {
         }
     }
 
-    pub fn swap_buffers(&mut self, after_swap: impl FnOnce(&mut Self, SwapchainAcquireFuture, Arc<Framebuffer>, SwapchainPresentInfo)) {
+    pub fn swap_buffers(&mut self) -> Option<(SwapchainAcquireFuture, Arc<Framebuffer>, SwapchainPresentInfo)> {
         let (image_index, suboptimal, acquire_future) = match swapchain::acquire_next_image(self.swapchain.clone(), None).map_err(Validated::unwrap) {
             Ok(r) => r,
             Err(VulkanError::OutOfDate) => {
                 self.needs_recreate = true;
-                return;
+                return None;
             }
             Err(e) => panic!("failed to acquire next image: {e}"),
         };
@@ -68,12 +72,7 @@ impl SwapChain {
         if suboptimal {
             self.needs_recreate = true;
         }
-        after_swap(
-            self,
-            acquire_future,
-            self.framebuffers.get(self).clone(),
-            SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index),
-        );
+        Some((acquire_future, self.framebuffers.get(self).clone(), SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index)))
     }
 
     pub fn needs_recreate(&self) -> bool {

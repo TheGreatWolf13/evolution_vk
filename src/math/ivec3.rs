@@ -6,7 +6,7 @@ use std::ops::{Add, Mul};
 use std::ops::{AddAssign, Sub};
 use std::ops::{MulAssign, Neg};
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct IVec3(pub(super) V);
 
 type P = i32;

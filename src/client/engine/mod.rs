@@ -1,23 +1,32 @@
-﻿mod swapchain;
+﻿pub mod buffer;
+mod future;
 mod pipeline;
+mod queue;
+mod swapchain;
 
+use crate::client::camera::Camera;
+use crate::client::engine::buffer::{BufferConsumer, SectionBuffers};
+use crate::client::engine::future::ExecutionFuture;
 use crate::client::engine::pipeline::{Pipeline, PipelineConsumer};
+use crate::client::engine::queue::Queue;
 use crate::client::engine::swapchain::SwapChain;
 use crate::client::input::InputHandler;
-use crate::client::mesh::Mesh;
+use crate::client::mesh::SectionMesh;
 use crate::client::texture::TextureManager;
-use crate::client::vertex::{VertexFormat, VertexPosCol, VertexPosTex};
+use crate::client::vertex::VertexPosTex;
 use crate::if_else;
+use crate::level::Level;
+use crate::math::mat4::Mat4;
 use log::{error, info};
 use std::sync::Arc;
 use std::time::Instant;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, BlitImageInfo, CommandBufferUsage, CopyBufferToImageInfo, PrimaryCommandBufferAbstract, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, BlitImageInfo, CommandBufferUsage, CopyBufferToImageInfo, DrawIndexedIndirectCommand, PrimaryAutoCommandBuffer, PrimaryCommandBufferAbstract, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents};
 use vulkano::descriptor_set::allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo};
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
-use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo, QueueFlags};
+use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features, QueueCreateInfo, QueueFlags};
 use vulkano::format::Format;
 use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo, SamplerMipmapMode, LOD_CLAMP_NONE};
 use vulkano::image::view::ImageView;
@@ -27,6 +36,7 @@ use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, Standar
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::render_pass::RenderPass;
 use vulkano::swapchain::Surface;
+use vulkano::sync::future::NowFuture;
 use vulkano::sync::GpuFuture;
 use vulkano::{sync, Validated, VulkanError, VulkanLibrary};
 use winit::dpi::{LogicalPosition, Position};
@@ -36,16 +46,17 @@ use winit::window::{CursorGrabMode, Window, WindowAttributes};
 pub struct GraphicsEngine {
     window: Arc<Window>,
     device: Arc<Device>,
-    graphics_queue: Arc<Queue>,
-    transfer_queue: Arc<Queue>,
+    graphics_queue: Queue,
+    transfer_queue: Queue,
     memory_allocator: Arc<StandardMemoryAllocator>,
     cb_allocator: StandardCommandBufferAllocator,
+    ds_allocator: Arc<StandardDescriptorSetAllocator>,
     render_pass: Arc<RenderPass>,
-    tex_pipeline: Pipeline<VertexPosTex>,
-    col_pipeline: Pipeline<VertexPosCol>,
+    terrain_pipeline: Pipeline<VertexPosTex>,
     swapchain: SwapChain,
     viewport: Viewport,
-    previous_frame_end: Option<Box<dyn GpuFuture>>,
+    section_buffers: SectionBuffers<VertexPosTex>,
+    exec_future: ExecutionFuture,
     last_frame: Instant,
     frames: u32,
     time: f32,
@@ -71,6 +82,7 @@ impl GraphicsEngine {
         let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
         let device_extensions = DeviceExtensions {
             khr_swapchain: true,
+            khr_shader_draw_parameters: true,
             ..DeviceExtensions::empty()
         };
         let (physical_device, graphics_family_index) = Self::select_physical_device(&instance, &surface, &device_extensions);
@@ -107,6 +119,7 @@ impl GraphicsEngine {
                     enabled_extensions: device_extensions,
                     enabled_features: Features {
                         fill_mode_non_solid: true,
+                        multi_draw_indirect: true,
                         ..Features::empty()
                     },
                     ..Default::default()
@@ -114,9 +127,8 @@ impl GraphicsEngine {
             ).expect("failed to create device")
         };
         let window_size = window.inner_size();
-        let graphics_queue = queues.next().unwrap();
-        let transfer_queue = queues.next().unwrap_or_else(|| graphics_queue.clone());
-        info!("Using queue family {} / {:?} for graphics and queue family {} / {:?} for transfers", graphics_queue.queue_family_index(), graphics_queue, transfer_queue.queue_family_index(), transfer_queue);
+        let (graphics_queue, transfer_queue) = Queue::new(queues);
+        info!("Using queue family {} for graphics and queue family {} for transfers", graphics_queue.get_family_index(), transfer_queue.get_family_index());
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         let image_format = physical_device.surface_formats(&surface, Default::default()).unwrap()[0].0;
         let render_pass = Self::get_render_pass(device.clone(), image_format);
@@ -124,11 +136,11 @@ impl GraphicsEngine {
         let cb_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
         let mut uploader = AutoCommandBufferBuilder::primary(
             &cb_allocator,
-            graphics_queue.queue_family_index(),
+            graphics_queue.get_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         ).unwrap();
         let ds_allocator = Arc::new(StandardDescriptorSetAllocator::new(device.clone(), StandardDescriptorSetAllocatorCreateInfo::default()));
-        let tex_pipeline = {
+        let terrain_pipeline = {
             let texture = {
                 let image = texture_manager.get_atlas_image();
                 let width = image.width();
@@ -194,35 +206,46 @@ impl GraphicsEngine {
                     ..Default::default()
                 },
             ).unwrap();
-            Pipeline::new(memory_allocator.clone(), &ds_allocator, render_pass.clone(), &swapchain, |buffer| {
-                [
-                    WriteDescriptorSet::buffer(0, buffer.clone()),
-                    WriteDescriptorSet::sampler(1, sampler.clone()),
-                    WriteDescriptorSet::image_view(2, texture.clone()),
-                ]
-            })
+            Pipeline::new(
+                memory_allocator.clone(),
+                &ds_allocator,
+                render_pass.clone(),
+                &swapchain,
+                |buffer| {
+                    [
+                        WriteDescriptorSet::buffer(0, buffer.clone()),
+                        WriteDescriptorSet::sampler(1, sampler.clone()),
+                        WriteDescriptorSet::image_view(2, texture.clone()),
+                    ]
+                }/*,
+                |buffer| {
+                    [
+                        WriteDescriptorSet::buffer(0, buffer.clone()),
+                    ]
+                }*/,
+            )
         };
-        let col_pipeline = Pipeline::new(memory_allocator.clone(), &ds_allocator, render_pass.clone(), &swapchain, |buffer| {
-            [WriteDescriptorSet::buffer(0, buffer.clone())]
-        });
         let viewport = Viewport {
             offset: [0.0, window_size.height as f32],
             extent: [window_size.width as f32, -(window_size.height as f32)],
             depth_range: 0.0..=1.0,
         };
+        let mut exec_future = ExecutionFuture::now(device.clone());
+        exec_future.join(uploader.build().unwrap(), &graphics_queue).then_signal_fence_and_flush().unwrap();
         Self {
             window,
-            device: device.clone(),
-            graphics_queue: graphics_queue.clone(),
+            device,
+            graphics_queue,
             transfer_queue,
-            memory_allocator,
+            memory_allocator: memory_allocator.clone(),
             cb_allocator,
+            ds_allocator,
             swapchain,
-            tex_pipeline,
-            col_pipeline,
+            terrain_pipeline,
             render_pass,
             viewport,
-            previous_frame_end: Some(uploader.build().unwrap().execute(graphics_queue).unwrap().boxed()),
+            section_buffers: SectionBuffers::new(memory_allocator),
+            exec_future,
             window_resized: false,
             last_frame: Instant::now(),
             frames: 0,
@@ -233,10 +256,6 @@ impl GraphicsEngine {
         }
     }
 
-    pub fn get_allocator(&self) -> &Arc<StandardMemoryAllocator> {
-        &self.memory_allocator
-    }
-
     fn select_physical_device(instance: &Arc<Instance>, surface: &Arc<Surface>, device_extensions: &DeviceExtensions) -> (Arc<PhysicalDevice>, u32) {
         instance
             .enumerate_physical_devices()
@@ -244,12 +263,12 @@ impl GraphicsEngine {
             .filter(|p| p.supported_extensions().contains(device_extensions))
             .filter_map(|p| {
                 p.queue_family_properties()
-                 .iter()
-                 .enumerate()
-                 .position(|(i, q)| {
-                     q.queue_flags.contains(QueueFlags::GRAPHICS) && p.surface_support(i as u32, surface).unwrap_or(false)
-                 })
-                 .map(|q| (p, q as u32))
+                    .iter()
+                    .enumerate()
+                    .position(|(i, q)| {
+                        q.queue_flags.contains(QueueFlags::GRAPHICS) && p.surface_support(i as u32, surface).unwrap_or(false)
+                    })
+                    .map(|q| (p, q as u32))
             })
             .min_by_key(|(p, _)| {
                 match p.properties().device_type {
@@ -339,6 +358,25 @@ impl GraphicsEngine {
         }
     }
 
+    pub fn update_section_meshes(&mut self, mut meshes: Vec<SectionMesh<VertexPosTex>>) {
+        if meshes.is_empty() {
+            return;
+        }
+        for mesh in &mut meshes {
+            self.section_buffers.enforce_section_allocation(mesh, &self.memory_allocator);
+        }
+        self.section_buffers.reallocate_if_needed(&self.memory_allocator, &self.cb_allocator, &self.transfer_queue, &mut self.exec_future);
+        let mut cb = AutoCommandBufferBuilder::primary(
+            &self.cb_allocator,
+            self.transfer_queue.get_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        ).unwrap();
+        for mesh in meshes {
+            self.section_buffers.submit(mesh, &self.memory_allocator, &mut cb);
+        }
+        self.exec_future.then_execute(cb.build().unwrap(), &self.transfer_queue);
+    }
+
     pub fn resize_or_update_swapchain(&mut self) {
         if self.window_resized || self.swapchain.needs_recreate() {
             let new_dimensions = self.window.inner_size();
@@ -352,10 +390,10 @@ impl GraphicsEngine {
         }
     }
 
-    pub fn swap_buffers<'a, 'b>(&mut self, tex: (<VertexPosTex as VertexFormat>::Uniform, impl IntoIterator<Item = &'a Mesh<VertexPosTex>>)) {
-        self.swapchain.swap_buffers(|swapchain, acquire_future, framebuffer, present_info| {
-            let mut builder = AutoCommandBufferBuilder::primary(&self.cb_allocator, self.graphics_queue.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
-            builder
+    pub fn render_game<const Y: usize>(&mut self, level: &Level<Y>, camera: &Camera) {
+        if let Some((acquire_future, framebuffer, present_info)) = self.swapchain.swap_buffers() {
+            let mut cb = AutoCommandBufferBuilder::primary(&self.cb_allocator, self.graphics_queue.get_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
+            cb
                 .begin_render_pass(
                     RenderPassBeginInfo {
                         clear_values: vec![
@@ -370,36 +408,45 @@ impl GraphicsEngine {
                     },
                 ).unwrap()
                 .set_viewport(0, [self.viewport.clone()].into_iter().collect())
-                .unwrap()
-                .render(&self.tex_pipeline, swapchain, tex.1)
-                .unwrap()
-                .end_render_pass(Default::default())
                 .unwrap();
-            let command_buffer = builder.build().unwrap();
+            self.render_level(&mut cb, level);
+            cb.end_render_pass(Default::default()).unwrap();
+            let cb = cb.build().unwrap();
             acquire_future.wait(None).unwrap();
-            self.previous_frame_end.as_mut().unwrap().cleanup_finished();
-            self.tex_pipeline.write_uniform(tex.0, swapchain);
-            let future = self.previous_frame_end
-                             .take()
-                             .unwrap()
-                             .join(acquire_future)
-                             .then_execute(self.graphics_queue.clone(), command_buffer)
-                             .unwrap()
-                             .then_swapchain_present(self.graphics_queue.clone(), present_info)
-                             .then_signal_fence_and_flush();
+            self.exec_future.cleanup_finished();
+            self.terrain_pipeline.write_uniform(camera.get_uniform(), &self.swapchain);
+            let future = self.exec_future
+                .join_future(acquire_future)
+                .then_execute(cb, &self.graphics_queue)
+                .then_swapchain_present(present_info, &self.graphics_queue)
+                .then_signal_fence_and_flush();
             match future.map_err(Validated::unwrap) {
-                Ok(future) => {
-                    self.previous_frame_end = Some(future.boxed());
-                }
+                Ok(()) => (),
                 Err(VulkanError::OutOfDate) => {
-                    swapchain.set_needs_recreate();
-                    self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                    self.swapchain.set_needs_recreate();
+                    self.exec_future = ExecutionFuture::now(self.device.clone());
                 }
                 Err(e) => {
                     error!("failed to flush future: {e}");
-                    self.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                    self.exec_future = ExecutionFuture::now(self.device.clone());
                 }
             }
+        }
+    }
+
+    fn render_level<const Y: usize>(&mut self, cb: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>, level: &Level<Y>) {
+        cb
+            .bind_pipeline(&self.terrain_pipeline, &self.swapchain).unwrap()
+            .bind_buffers(&self.section_buffers).unwrap();
+        let min_y_section = level.get_min_y_section();
+        level.get_chunks().for_each(|(pos, chunk)| {
+            chunk.get_sections().iter().for_each(|section| {
+                if let Some(region) = section.get_mesh_region() {
+                    cb
+                        .push_constant(&self.terrain_pipeline, section.get_transform(section.get_pos(*pos, min_y_section))).unwrap()
+                        .draw_indexed(region.get_index_count(), 1, region.get_index_start(), region.get_vertex_start() as i32, 0).unwrap();
+                }
+            })
         });
     }
 }
@@ -411,7 +458,6 @@ impl InputHandler for GraphicsEngine {
 
     fn toggle_wireframe(&mut self) {
         self.wireframe = !self.wireframe;
-        self.col_pipeline.set_wireframe(self.wireframe);
-        self.tex_pipeline.set_wireframe(self.wireframe);
+        self.terrain_pipeline.set_wireframe(self.wireframe);
     }
 }

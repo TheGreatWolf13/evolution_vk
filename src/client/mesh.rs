@@ -1,61 +1,69 @@
-﻿use crate::client::model::BakedModel;
-use crate::client::vertex::{Transform, Vertex, VertexFormat, VertexPosTex};
+﻿use crate::client::engine::buffer::MappedRegion;
+use crate::client::model::BakedModel;
+use crate::client::vertex::{Vertex, VertexFormat, VertexPosTex};
 use crate::math::direction::Direction;
+use crate::math::mat4::Mat4;
+use crate::math::section_pos::SectionPos;
 use bitvec::vec::BitVec;
 use enum_iterator::all;
 use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator};
-use vulkano::pipeline::PipelineLayout;
 use vulkano::ValidationError;
 
 pub struct Mesh<V: VertexFormat> {
     vertex_buffer: Subbuffer<[V]>,
     index_buffer: Subbuffer<[u32]>,
-    transform: V::PushConstantInput,
 }
 
 pub struct MeshBuilder<V: VertexFormat> {
-    transform: V::PushConstantInput,
     vertex_buffer: Vec<V>,
     index_buffer: Vec<u32>,
-    local_transform: V::PushConstantInput,
+    local_transform: Mat4,
+}
+
+#[derive(Debug)]
+pub enum SectionMesh<'a, V: VertexFormat> {
+    Empty,
+    Mesh(SectionMeshData<'a, V>),
+}
+
+#[derive(Debug)]
+pub struct SectionMeshData<'a, V: VertexFormat> {
+    vertex_buffer: Vec<V>,
+    index_buffer: Vec<u32>,
+    pos: SectionPos,
+    region: &'a mut Option<MappedRegion>,
 }
 
 impl<V: VertexFormat> Mesh<V> {
-    pub fn draw<'a>(&self, builder: &'a mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>, layout: Arc<PipelineLayout>) -> Result<&'a mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>, Box<ValidationError>> {
+    pub fn draw<'a>(&self, builder: &'a mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) -> Result<&'a mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>, Box<ValidationError>> {
         Ok(
             builder
-                .push_constants(layout, 0, self.transform.into())?
                 .bind_vertex_buffers(0, self.vertex_buffer.clone())?
                 .bind_index_buffer(self.index_buffer.clone())?
                 .draw_indexed(self.index_buffer.len() as u32, 1, 0, 0, 0)?
         )
     }
-
-    pub fn get_transform(&self) -> V::PushConstantInput {
-        self.transform
-    }
 }
 
 impl<V: VertexFormat> MeshBuilder<V> {
-    pub fn new(transform: V::PushConstantInput) -> Self {
+    pub fn new() -> Self {
         Self {
-            transform,
             vertex_buffer: vec![],
             index_buffer: vec![],
-            local_transform: V::PushConstantInput::identity(),
+            local_transform: Mat4::IDENTITY,
         }
     }
 
-    pub fn local_transform(mut self, local_transform: V::PushConstantInput) -> Self {
+    pub fn local_transform(mut self, local_transform: Mat4) -> Self {
         self.local_transform = local_transform;
         self
     }
 
     pub fn reset_local_transform(mut self) -> Self {
-        self.local_transform = V::PushConstantInput::identity();
+        self.local_transform = Mat4::IDENTITY;
         self
     }
 
@@ -73,22 +81,26 @@ impl<V: VertexFormat> MeshBuilder<V> {
         self
     }
 
+    pub fn build_section(self, pos: SectionPos, region: &'_ mut Option<MappedRegion>) -> SectionMesh<'_, V> {
+        if self.vertex_buffer.is_empty() {
+            return SectionMesh::Empty;
+        }
+        SectionMesh::Mesh(SectionMeshData {
+            vertex_buffer: self.vertex_buffer,
+            index_buffer: self.index_buffer,
+            pos,
+            region,
+        })
+    }
+
     pub fn build(self, allocator: Arc<StandardMemoryAllocator>) -> Option<Mesh<V>> {
         if self.vertex_buffer.is_empty() {
             return None;
         }
         Some(Mesh {
-            transform: self.transform,
             vertex_buffer: Self::create_buffer(BufferUsage::VERTEX_BUFFER, self.vertex_buffer, allocator.clone()),
             index_buffer: Self::create_buffer(BufferUsage::INDEX_BUFFER, self.index_buffer, allocator),
         })
-    }
-
-    pub fn merge(mut self, mesh: MeshBuilder<V>) -> Self {
-        let last_index = self.vertex_buffer.len() as u32;
-        self.index_buffer.extend(mesh.index_buffer.iter().map(|i| i + last_index));
-        self.vertex_buffer.extend(mesh.vertex_buffer.iter().map(|v| v.transform_and_untransform(mesh.transform, self.transform)));
-        self
     }
 
     fn create_buffer<T: BufferContents>(usage: BufferUsage, content: Vec<T>, allocator: Arc<StandardMemoryAllocator>) -> Subbuffer<[T]> {
@@ -164,5 +176,31 @@ impl MeshBuilder<VertexPosTex> {
             }
         }
         self
+    }
+}
+
+impl<'a, V: VertexFormat> SectionMeshData<'a, V> {
+    pub fn get_region(&self) -> Option<&MappedRegion> {
+        self.region.as_ref()
+    }
+
+    pub fn get_vertices(&self) -> &[V] {
+        self.vertex_buffer.as_slice()
+    }
+
+    pub fn get_indices(&self) -> &[u32] {
+        self.index_buffer.as_slice()
+    }
+
+    pub fn get_region_mut(&mut self) -> &mut Option<MappedRegion> {
+        &mut self.region
+    }
+
+    pub fn get_vertex_count(&self) -> usize {
+        self.vertex_buffer.len()
+    }
+
+    pub fn get_index_count(&self) -> usize {
+        self.index_buffer.len()
     }
 }

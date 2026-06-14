@@ -13,6 +13,7 @@ pub mod local_section_pos;
 pub mod mat3;
 pub mod mat4;
 pub mod quat;
+pub mod section_pos;
 pub mod u8vec3;
 pub mod uvec2;
 pub mod vec2;

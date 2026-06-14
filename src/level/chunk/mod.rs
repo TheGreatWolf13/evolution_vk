@@ -1,4 +1,5 @@
-﻿use crate::client::mesh::{Mesh, MeshBuilder};
+﻿use crate::client::engine::buffer::MappedRegion;
+use crate::client::mesh::{MeshBuilder, SectionMesh};
 use crate::client::model::ModelManager;
 use crate::client::vertex::VertexPosTex;
 use crate::level::chunk::palette::BlockPallet;
@@ -6,13 +7,12 @@ use crate::math::chunk_pos::ChunkPos;
 use crate::math::direction::Direction;
 use crate::math::local_section_pos::LocalSectionPos;
 use crate::math::mat4::Mat4;
+use crate::math::section_pos::SectionPos;
 use crate::Block;
 use bitvec::order::Lsb0;
 use bitvec::vec::BitVec;
 use enum_iterator::all;
 use itertools::Itertools;
-use std::sync::Arc;
-use vulkano::memory::allocator::StandardMemoryAllocator;
 
 mod palette;
 
@@ -24,7 +24,7 @@ pub struct Chunk<const Y: usize> {
 pub struct Section {
     index: u8,
     blocks: BlockPallet,
-    mesh: Option<Mesh<VertexPosTex>>,
+    mesh_region: Option<MappedRegion>,
     dirty: bool,
 }
 
@@ -32,13 +32,21 @@ impl Section {
     pub const SIZE: i8 = 32;
     pub const MASK: i8 = Self::SIZE - 1;
 
-    pub fn get_mesh(&self) -> Option<&Mesh<VertexPosTex>> {
-        self.mesh.as_ref()
+    pub fn get_transform(&self, pos: SectionPos) -> Mat4 {
+        Mat4::from_translation((pos.x() as f32 * Self::SIZE as f32, pos.y() as f32, pos.z() as f32 * Self::SIZE as f32))
     }
 
-    pub fn remesh(&mut self, pos: ChunkPos, min_y_section: i8, model_manager: &ModelManager, allocator: Arc<StandardMemoryAllocator>) {
+    pub fn get_pos(&self, chunk_pos: ChunkPos, min_y_section: i8) -> SectionPos {
+        chunk_pos.with_section_y(self.index as i32 + min_y_section as i32)
+    }
+
+    pub fn get_mesh_region(&self) -> Option<&MappedRegion> {
+        self.mesh_region.as_ref()
+    }
+
+    pub fn remesh(&'_ mut self, pos: ChunkPos, min_y_section: i8, model_manager: &ModelManager) -> Option<SectionMesh<'_, VertexPosTex>> {
         if self.dirty {
-            let mut builder = MeshBuilder::new(Mat4::from_translation((pos.x() as f32 * Section::SIZE as f32, (self.index as i32 + min_y_section as i32) as f32 * Section::SIZE as f32, pos.z() as f32 * Section::SIZE as f32)));
+            let mut builder = MeshBuilder::new();
             for x in 0..Self::SIZE {
                 for y in 0..Self::SIZE {
                     for z in 0..Self::SIZE {
@@ -60,8 +68,11 @@ impl Section {
                     }
                 }
             }
-            self.mesh = builder.build(allocator);
             self.dirty = false;
+            Some(builder.build_section(pos.with_section_y(self.index as i32 + min_y_section as i32), &mut self.mesh_region))
+        } //
+        else {
+            None
         }
     }
 }
@@ -79,7 +90,7 @@ impl<const Y: usize> Chunk<Y> {
                         3 => Block!(DIRT),
                         _ => Block!(AIR),
                     }),
-                    mesh: None,
+                    mesh_region: None,
                     dirty: true,
                 }
             }).next_array().unwrap(),

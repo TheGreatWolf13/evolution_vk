@@ -1,3 +1,4 @@
+extern crate alloc;
 extern crate core;
 
 use crate::block::Blocks;
@@ -6,6 +7,7 @@ use crate::client::engine::GraphicsEngine;
 use crate::client::input::Input;
 use crate::client::resources::ResourceManager;
 use crate::level::Level;
+use crate::math::section_pos::SectionPos;
 use crate::util::timer::{FrameRateLimit, Timer};
 use itertools::Itertools;
 use log::info;
@@ -119,15 +121,16 @@ impl ApplicationHandler for Game {
                         data.input.tick(&mut data.camera, &mut data.graphics);
                     });
                     data.timer.try_frame(|partial_tick| {
+                        // info!("Frame start");
                         let engine = &mut data.graphics;
                         let min_y_section = data.level.get_min_y_section();
-                        data.level.get_chunks_mut().for_each(|(pos, c)| c.get_sections_mut().iter_mut().for_each(|s| s.remesh(*pos, min_y_section, data.resource_manager.get_model_manager(), engine.get_allocator().clone())));
+                        let meshes = data.level.get_chunks_mut().flat_map(|(pos, c)| c.get_sections_mut().iter_mut().filter(|s| s.get_pos(*pos, min_y_section) == SectionPos::new(0, -1, 0)).flat_map(|s| s.remesh(*pos, min_y_section, data.resource_manager.get_model_manager()))).collect::<Vec<_>>();
+                        engine.update_section_meshes(meshes);
                         data.camera.adjust(engine.get_window().inner_size(), partial_tick);
                         engine.update_fps();
                         engine.resize_or_update_swapchain();
-                        engine.swap_buffers(
-                            ((data.camera.get_view(), data.camera.get_proj()).into(), data.level.get_chunks().flat_map(|(_, c)| c.get_sections().iter().map(|s| s.get_mesh()).flatten())),
-                        );
+                        engine.render_game(&data.level, &data.camera);
+                        // info!("Frame end")
                     });
                 }
             }

@@ -1,4 +1,5 @@
 ﻿use crate::math::ivec2::IVec2;
+use crate::math::section_pos::SectionPos;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
@@ -40,5 +41,9 @@ impl ChunkPos {
     #[must_use]
     pub const fn z_mut(&mut self) -> &mut i32 {
         self.0.y_mut()
+    }
+
+    pub fn with_section_y(self, y: i32) -> SectionPos {
+        SectionPos::new(self.x(), y, self.z())
     }
 }
