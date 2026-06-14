@@ -17,6 +17,8 @@ use crate::client::vertex::VertexPosTex;
 use crate::if_else;
 use crate::level::Level;
 use crate::math::mat4::Mat4;
+use crate::math::vec3::Vec3;
+use crate::math::Vector3;
 use log::{error, info};
 use std::sync::Arc;
 use std::time::Instant;
@@ -328,14 +330,14 @@ impl GraphicsEngine {
         self.window_focused
     }
 
-    pub fn update_fps(&mut self) {
+    pub fn update_fps(&mut self, player_pos: Vec3) {
         let now = Instant::now();
         let delta = now - self.last_frame;
         self.frames += 1;
         self.time += delta.as_secs_f32();
         if self.time >= 1.0 {
             let (phys, virt) = memory_stats::memory_stats().map_or_else(|| (0, 0), |stats| (stats.physical_mem, stats.virtual_mem));
-            info!("FPS: {} / {:.1}% / Phys: {:.1}MB / Virt: {:.1}MB", self.frames, 100.0 * 120.0 / self.frames as f32, phys as f32 / 1024.0 / 1024.0, virt as f32 / 1024.0 / 1024.0);
+            info!("FPS: {} / {:.1}% / Phys: {:.1}MB / Virt: {:.1}MB / Pos: {:.3}, {:.3}, {:.3}", self.frames, 100.0 * 120.0 / self.frames as f32, phys as f32 / 1024.0 / 1024.0, virt as f32 / 1024.0 / 1024.0, player_pos.x(), player_pos.y(), player_pos.z());
             self.frames = 0;
             self.time = 0.0;
         }

@@ -20,7 +20,7 @@ pub struct CameraUniform {
 impl Camera {
     pub fn new() -> Self {
         Self {
-            pos: PaP::new(Vec3::ZERO),
+            pos: PaP::new(Vec3::new(0.0, 2.0, 0.0)),
             rot: PaP::new(Rot3Deg::ZERO),
             view: Mat4::IDENTITY,
             proj: Mat4::IDENTITY,
@@ -58,5 +58,9 @@ impl Camera {
             view: self.view,
             proj: self.proj,
         }
+    }
+
+    pub fn get_pos(&self) -> Vec3 {
+        self.pos.1
     }
 }
