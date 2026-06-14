@@ -164,8 +164,7 @@ fn main() {
     }
     env_logger::builder().format_source_path(true).format_target(false).init();
     info!("Initializing Evolution VK");
-    let x = Blocks::all().map(|b| b.get_name_id()).intersperse(", ").collect::<String>();
-    info!("{}", x);
+    info!("{}", Blocks::all().map(|b| b.get_name_id()).intersperse(", ").collect::<String>());
     let event_loop = EventLoop::new().unwrap();
     let mut game = Game::Uninit;
     event_loop.run_app(&mut game).unwrap();
