@@ -133,7 +133,9 @@ impl<T: BufferContents + Debug> GlobalBuffer<T> {
                 capacity: old_region.capacity - len,
             };
             self.free_regions.push(new_region);
-            self.free_regions.swap_remove(index).to_buffer_region()
+            let mut region = self.free_regions.swap_remove(index).to_buffer_region();
+            region.capacity = len;
+            region
         }
     }
 
@@ -210,10 +212,9 @@ impl<T: BufferContents + Debug> GlobalBuffer<T> {
             },
             vec,
         ).unwrap();
-        // let mut info = CopyBufferInfo::buffers(upload_buffer, self.buffer.clone());
-        // info.regions[0].dst_offset = region.start as DeviceSize;
-        // uploader.copy_buffer(info).unwrap();
-        self.buffer = upload_buffer;
+        let mut info = CopyBufferInfo::buffers(upload_buffer, self.buffer.clone());
+        info.regions[0].dst_offset = (region.start * size_of::<T>()) as DeviceSize;
+        uploader.copy_buffer(info).unwrap();
         len
     }
 }

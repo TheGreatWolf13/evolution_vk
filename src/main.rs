@@ -123,7 +123,7 @@ impl ApplicationHandler for Game {
                     data.timer.try_frame(|partial_tick| {
                         let engine = &mut data.graphics;
                         let min_y_section = data.level.get_min_y_section();
-                        let meshes = data.level.get_chunks_mut().flat_map(|(pos, c)| c.get_sections_mut().iter_mut().filter(|s| s.get_pos(*pos, min_y_section) == SectionPos::new(0, -1, 0)).flat_map(|s| s.remesh(*pos, min_y_section, data.resource_manager.get_model_manager()))).collect::<Vec<_>>();
+                        let meshes = data.level.get_chunks_mut().flat_map(|(pos, c)| c.get_sections_mut().iter_mut().flat_map(|s| s.remesh(*pos, min_y_section, data.resource_manager.get_model_manager()))).collect::<Vec<_>>();
                         engine.update_section_meshes(meshes);
                         data.camera.adjust(engine.get_window().inner_size(), partial_tick);
                         engine.update_fps(data.camera.get_pos());

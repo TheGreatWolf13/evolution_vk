@@ -33,7 +33,7 @@ impl Section {
     pub const MASK: i8 = Self::SIZE - 1;
 
     pub fn get_transform(&self, pos: SectionPos) -> Mat4 {
-        Mat4::from_translation((pos.x() as f32 * Self::SIZE as f32, pos.y() as f32, pos.z() as f32 * Self::SIZE as f32))
+        Mat4::from_translation((pos.x() as f32 * Self::SIZE as f32, pos.y() as f32 * Self::SIZE as f32, pos.z() as f32 * Self::SIZE as f32))
     }
 
     pub fn get_pos(&self, chunk_pos: ChunkPos, min_y_section: i8) -> SectionPos {
