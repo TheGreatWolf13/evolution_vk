@@ -7,7 +7,6 @@ use crate::client::engine::GraphicsEngine;
 use crate::client::input::Input;
 use crate::client::resources::ResourceManager;
 use crate::level::Level;
-use crate::math::section_pos::SectionPos;
 use crate::util::timer::{FrameRateLimit, Timer};
 use itertools::Itertools;
 use log::info;
