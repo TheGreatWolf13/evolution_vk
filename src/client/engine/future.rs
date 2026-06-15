@@ -42,7 +42,11 @@ impl ExecutionFuture {
 
     pub(super) fn then_execute(&mut self, cb: Arc<PrimaryAutoCommandBuffer>, queue: &Queue) -> &mut Self {
         assert!(self.inner.is_some());
-        if self.current_queue != queue.get_type() {
+        if self.current_queue == QueueType::Dummy {
+            self.current_queue = queue.get_type();
+            self.inner = Some(queue.then_execute(self.inner.take().unwrap(), cb));
+        } //
+        else if self.current_queue != queue.get_type() {
             // info!("Then exec + semaphore + flush {:?} -> {:?}", self.current_queue, queue.get_type());
             self.current_queue = queue.get_type();
             self.inner = Some(queue.then_execute(self.inner.take().unwrap().then_signal_semaphore_and_flush().unwrap().boxed(), cb));
@@ -64,6 +68,7 @@ impl ExecutionFuture {
     pub(super) fn join_future<F: GpuFuture + 'static>(&mut self, future: F) -> &mut Self {
         assert!(self.inner.is_some());
         self.inner = Some(self.inner.take().unwrap().join(future).boxed());
+        self.current_queue = QueueType::Dummy;
         assert!(self.inner.is_some());
         self
     }
