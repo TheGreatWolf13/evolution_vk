@@ -2,6 +2,7 @@
 use std::any::type_name;
 
 pub mod error;
+pub mod lazy_init;
 pub mod random;
 pub mod timer;
 
