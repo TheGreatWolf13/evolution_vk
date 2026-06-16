@@ -5,6 +5,7 @@ use std::ops::AddAssign;
 use std::ops::MulAssign;
 use std::ops::{Add, Sub};
 use std::ops::{Mul, SubAssign};
+use winit::dpi::PhysicalSize;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct UVec2(pub(super) V);
@@ -70,3 +71,4 @@ impl_from!((P, P) as S: v => Self(V::from(v)));
 impl_from!([P; 2] as S: v => Self(V::from(v)));
 impl_from!(S as (P, P): v => (v.x(), v.y()));
 impl_from!(S as [P; 2]: v => [v.x(), v.y()]);
+impl_from!(PhysicalSize<P> as S: v => Self(V::new(v.width, v.height)));

@@ -72,9 +72,9 @@ impl ApplicationHandler for Game {
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
         match event {
-            WindowEvent::Resized(_) => {
+            WindowEvent::Resized(size) => {
                 if let Game::Init(data) = self {
-                    data.graphics.set_window_should_resize(true);
+                    data.graphics.changed_size(size);
                 }
             }
             WindowEvent::Moved(_) => {}

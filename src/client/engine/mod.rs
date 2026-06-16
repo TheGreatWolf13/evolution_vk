@@ -3,6 +3,7 @@ mod future;
 mod pipeline;
 mod queue;
 mod swapchain;
+mod window;
 
 use crate::client::camera::Camera;
 use crate::client::engine::buffer::{BufferConsumer, SectionBuffers};
@@ -10,6 +11,7 @@ use crate::client::engine::future::ExecutionFuture;
 use crate::client::engine::pipeline::{Pipeline, PipelineConsumer};
 use crate::client::engine::queue::Queue;
 use crate::client::engine::swapchain::SwapChain;
+use crate::client::engine::window::WindowParams;
 use crate::client::input::InputHandler;
 use crate::client::mesh::SectionMesh;
 use crate::client::texture::TextureManager;
@@ -17,6 +19,7 @@ use crate::client::vertex::VertexPosTex;
 use crate::if_else;
 use crate::level::Level;
 use crate::math::mat4::Mat4;
+use crate::math::uvec2::UVec2;
 use crate::math::vec3::Vec3;
 use crate::math::Vector3;
 use log::{error, info};
@@ -58,10 +61,9 @@ pub struct GraphicsEngine {
     section_buffers: SectionBuffers<VertexPosTex>,
     exec_future: ExecutionFuture,
     last_frame: Instant,
+    window_params: WindowParams,
     frames: u32,
     time: f32,
-    window_resized: bool,
-    window_focused: bool,
     mouse_grabbed: bool,
     wireframe: bool,
 }
@@ -247,12 +249,11 @@ impl GraphicsEngine {
             viewport,
             section_buffers: SectionBuffers::new(memory_allocator),
             exec_future,
-            window_resized: false,
+            window_params: WindowParams::new(window_size),
             last_frame: Instant::now(),
             frames: 0,
             time: 0.0,
             mouse_grabbed: false,
-            window_focused: true,
             wireframe: false,
         }
     }
@@ -309,14 +310,6 @@ impl GraphicsEngine {
         ).unwrap()
     }
 
-    pub fn set_window_should_resize(&mut self, resize: bool) {
-        self.window_resized = resize;
-    }
-
-    pub fn set_window_focused(&mut self, focused: bool) {
-        self.window_focused = focused;
-    }
-
     pub fn get_window(&self) -> &Arc<Window> {
         &self.window
     }
@@ -326,7 +319,15 @@ impl GraphicsEngine {
     }
 
     pub fn is_window_focused(&self) -> bool {
-        self.window_focused
+        self.window_params.is_window_focused()
+    }
+
+    pub fn set_window_focused(&mut self, focused: bool) {
+        self.window_params.set_focused(focused);
+    }
+
+    pub fn changed_size(&mut self, size: impl Into<UVec2>) {
+        self.window_params.changed_size(size);
     }
 
     pub fn update_fps(&mut self, player_pos: Vec3) {
@@ -379,19 +380,19 @@ impl GraphicsEngine {
     }
 
     pub fn resize_or_update_swapchain(&mut self) {
-        if self.window_resized || self.swapchain.needs_recreate() {
+        if self.window_params.should_resize() || self.swapchain.needs_recreate() {
             let new_dimensions = self.window.inner_size();
-            if new_dimensions.width == 0 || new_dimensions.height == 0 {
-                return;
-            }
             self.viewport.offset = [0.0, new_dimensions.height as f32];
             self.viewport.extent = [new_dimensions.width as f32, -(new_dimensions.height as f32)];
             self.swapchain.recreate(new_dimensions, self.render_pass.clone(), self.memory_allocator.clone());
-            self.window_resized = false;
+            self.window_params.set_resized();
         }
     }
 
     pub fn render_game<const Y: usize>(&mut self, level: &Level<Y>, camera: &Camera) {
+        if self.window_params.is_window_minimized() {
+            return;
+        }
         if let Some((acquire_future, framebuffer, present_info)) = self.swapchain.swap_buffers() {
             let mut cb = AutoCommandBufferBuilder::primary(&self.cb_allocator, self.graphics_queue.get_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
             cb
