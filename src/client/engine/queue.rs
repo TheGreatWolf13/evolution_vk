@@ -5,20 +5,13 @@ use vulkano::swapchain::{PresentFuture, SwapchainPresentInfo};
 use vulkano::sync::future::NowFuture;
 use vulkano::sync::GpuFuture;
 
+#[derive(Clone)]
 pub(super) struct Queue {
     inner: Arc<Q>,
-    ty: QueueType,
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub(super) enum QueueType {
-    Graphics,
-    Transfer,
-    Dummy,
 }
 
 impl Queue {
-    pub(super) fn new(mut queues: impl ExactSizeIterator<Item=Arc<Q>>) -> (Self, Self) {
+    pub(super) fn new(mut queues: impl ExactSizeIterator<Item = Arc<Q>>) -> (Self, Self) {
         let g = queues.next().unwrap();
         let t = queues.next().unwrap_or_else(|| g.clone());
         let t = g.clone();
@@ -26,21 +19,15 @@ impl Queue {
         (
             Self {
                 inner: g,
-                ty: QueueType::Graphics,
             },
             Self {
                 inner: t,
-                ty: QueueType::Transfer,
             }
         )
     }
 
     pub(super) fn get_family_index(&self) -> u32 {
         self.inner.queue_family_index()
-    }
-
-    pub(super) fn get_type(&self) -> QueueType {
-        self.ty
     }
 
     pub(super) fn execute(&self, cb: Arc<PrimaryAutoCommandBuffer>) -> CommandBufferExecFuture<NowFuture> {
@@ -55,3 +42,19 @@ impl Queue {
         future.then_swapchain_present(self.inner.clone(), present_info)
     }
 }
+
+impl From<Arc<Q>> for Queue {
+    fn from(value: Arc<Q>) -> Self {
+        Self {
+            inner: value.clone(),
+        }
+    }
+}
+
+impl PartialEq for Queue {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl Eq for Queue {}

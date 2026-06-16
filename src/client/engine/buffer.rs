@@ -2,6 +2,7 @@
 use crate::client::engine::queue::Queue;
 use crate::client::mesh::SectionMesh;
 use crate::client::vertex::{VertexFormat, VertexPosTex};
+use crate::util::lazy_init::LazyInit;
 use core::fmt::Debug;
 use log::debug;
 use std::any::type_name;
@@ -97,8 +98,18 @@ impl<V: VertexFormat> SectionBuffers<V> {
     }
 
     pub(super) fn reallocate_if_needed(&mut self, allocator: &Arc<StandardMemoryAllocator>, cb_allocator: &StandardCommandBufferAllocator, queue: &Queue, exec_future: &mut ExecutionFuture) {
-        self.vertex_buffer.realloc_buffer_if_needed(allocator, cb_allocator, queue, exec_future);
-        self.index_buffer.realloc_buffer_if_needed(allocator, cb_allocator, queue, exec_future);
+        let mut cb_holder = LazyInit::new(|| {
+            AutoCommandBufferBuilder::primary(
+                cb_allocator,
+                queue.get_family_index(),
+                CommandBufferUsage::OneTimeSubmit,
+            ).unwrap()
+        });
+        self.vertex_buffer.realloc_buffer_if_needed(allocator, cb_allocator, queue, exec_future, &mut cb_holder);
+        self.index_buffer.realloc_buffer_if_needed(allocator, cb_allocator, queue, exec_future, &mut cb_holder);
+        if let Some(cb) = cb_holder.get() {
+            exec_future.then_execute(cb.build().unwrap(), queue);
+        }
     }
 }
 
@@ -170,7 +181,7 @@ impl<T: BufferContents + Debug> GlobalBuffer<T> {
         todo!()
     }
 
-    fn realloc_buffer_if_needed(&mut self, allocator: &Arc<StandardMemoryAllocator>, cb_allocator: &StandardCommandBufferAllocator, queue: &Queue, exec_future: &mut ExecutionFuture) {
+    fn realloc_buffer_if_needed<F: FnOnce() -> AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>>(&mut self, allocator: &Arc<StandardMemoryAllocator>, cb_allocator: &StandardCommandBufferAllocator, queue: &Queue, exec_future: &mut ExecutionFuture, cb_holder: &mut LazyInit<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>, F>) {
         if self.capacity as DeviceSize != self.buffer.len() {
             let new_buffer = Buffer::new_slice(
                 allocator.clone(),
@@ -186,13 +197,7 @@ impl<T: BufferContents + Debug> GlobalBuffer<T> {
             ).unwrap();
             let info = CopyBufferInfo::buffers(self.buffer.clone(), new_buffer.clone());
             self.buffer = new_buffer;
-            let mut cb = AutoCommandBufferBuilder::primary(
-                cb_allocator,
-                queue.get_family_index(),
-                CommandBufferUsage::OneTimeSubmit,
-            ).unwrap();
-            cb.copy_buffer(info).unwrap();
-            exec_future.join(cb.build().unwrap(), queue);
+            cb_holder.get_or_init().copy_buffer(info).unwrap();
         }
     }
 
