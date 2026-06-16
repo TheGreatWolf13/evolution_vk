@@ -1,13 +1,17 @@
-﻿pub struct LazyInit<'a, T> {
+﻿use std::marker::PhantomData;
+
+pub struct LazyInit<'a, T, F: FnOnce() -> T + 'a> {
     t: Option<T>,
-    t_maker: Option<Box<dyn FnOnce() -> T + 'a>>,
+    t_maker: Option<F>,
+    _phantom: PhantomData<&'a F>,
 }
 
-impl<'a, T> LazyInit<'a, T> {
-    pub fn new<F: FnOnce() -> T + 'a>(t_maker: F) -> Self {
+impl<'a, T, F: FnOnce() -> T + 'a> LazyInit<'a, T, F> {
+    pub fn new(t_maker: F) -> Self {
         Self {
             t: None,
-            t_maker: Some(Box::new(t_maker)),
+            t_maker: Some(t_maker),
+            _phantom: PhantomData,
         }
     }
 
