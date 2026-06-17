@@ -1,10 +1,10 @@
 ﻿use crate::client::engine::buffer::MappedRegion;
 use crate::client::model::BakedModel;
 use crate::client::vertex::{Vertex, VertexFormat, VertexPosTex};
+use crate::math::bitvec::{BitVec, BitVec8};
 use crate::math::direction::Direction;
 use crate::math::mat4::Mat4;
 use crate::math::section_pos::SectionPos;
-use bitvec::vec::BitVec;
 use enum_iterator::all;
 use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
@@ -162,13 +162,13 @@ impl MeshBuilder<VertexPosTex> {
         ])
     }
 
-    pub fn model(mut self, model: &BakedModel, faces: BitVec) -> Self {
+    pub fn model(mut self, model: &BakedModel, faces: BitVec8) -> Self {
         let last_index = self.vertex_buffer.len() as u32;
         let data = model.get_data(None);
         self.index_buffer.extend(data.1.iter().map(|i| i + last_index));
         self.vertex_buffer.extend(data.0.iter().map(|v| v.transform(self.local_transform)));
         for (i, dir) in all::<Direction>().enumerate() {
-            if faces[i] {
+            if faces.get_at(i) {
                 let last_index = self.vertex_buffer.len() as u32;
                 let data = model.get_data(Some(dir));
                 self.index_buffer.extend(data.1.iter().map(|i| i + last_index));

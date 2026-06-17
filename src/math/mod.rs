@@ -2,6 +2,7 @@
 use std::ops::{Add, Mul, RangeBounds};
 
 pub mod angle;
+pub mod bitvec;
 pub mod block_pos;
 pub mod chunk_pos;
 pub mod color;

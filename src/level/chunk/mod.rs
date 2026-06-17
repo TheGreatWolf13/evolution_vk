@@ -3,14 +3,13 @@ use crate::client::mesh::{MeshBuilder, SectionMesh};
 use crate::client::model::ModelManager;
 use crate::client::vertex::VertexPosTex;
 use crate::level::chunk::palette::BlockPallet;
+use crate::math::bitvec::{BitVec, BitVec8};
 use crate::math::chunk_pos::ChunkPos;
 use crate::math::direction::Direction;
 use crate::math::local_section_pos::LocalSectionPos;
 use crate::math::mat4::Mat4;
 use crate::math::section_pos::SectionPos;
 use crate::Block;
-use bitvec::order::Lsb0;
-use bitvec::vec::BitVec;
 use enum_iterator::all;
 use itertools::Itertools;
 
@@ -53,7 +52,7 @@ impl Section {
                         let pos = LocalSectionPos::new(x.into(), y.into(), z.into());
                         let block = self.blocks.get_block_at(pos);
                         if block != Block!(AIR) {
-                            let mut faces = BitVec::<usize, Lsb0>::new();
+                            let mut faces = BitVec8::new();
                             for dir in all::<Direction>() {
                                 let neighbour_pos = pos.offset(dir);
                                 if neighbour_pos.is_out_of_range() || self.blocks.get_block_at(neighbour_pos) == Block!(AIR) {
