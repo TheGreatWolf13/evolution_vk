@@ -1,16 +1,17 @@
 ﻿use crate::client::texture::atlas::{RawTextureInfo, TextureId, TextureInfo};
-use crate::math::uvec2::UVec2;
-use crate::math::vec2::Vec2;
+use crate::math::vec2f::Vec2F32;
+use crate::math::vec2u::Vec2U32;
+use crate::math::Vector2;
 
 #[derive(Copy, Clone)]
-struct Rect(UVec2, UVec2, u32);
+struct Rect(Vec2U32, Vec2U32, u32);
 
 impl Rect {
-    const fn width(&self) -> u32 {
+    fn width(&self) -> u32 {
         self.1.x() - self.0.x()
     }
 
-    const fn height(&self) -> u32 {
+    fn height(&self) -> u32 {
         self.1.y() - self.0.y()
     }
 
@@ -36,38 +37,38 @@ impl PartialEq for Rect {
 }
 
 pub(super) struct UVConstructor {
-    size: UVec2,
+    size: Vec2U32,
 }
 
 impl UVConstructor {
     pub fn get_uv(&self, id: TextureId, info: RawTextureInfo) -> TextureInfo {
         TextureInfo::new(
             id,
-            Vec2::new(info.0.x() as f32 / self.size.x() as f32, info.0.y() as f32 / self.size.y() as f32),
-            Vec2::new(info.1.x() as f32 / self.size.x() as f32, info.1.y() as f32 / self.size.y() as f32),
+            Vec2F32::new(info.0.x() as f32 / self.size.x() as f32, info.0.y() as f32 / self.size.y() as f32),
+            Vec2F32::new(info.1.x() as f32 / self.size.x() as f32, info.1.y() as f32 / self.size.y() as f32),
         )
     }
 
-    pub fn get_size(&self) -> UVec2 {
+    pub fn get_size(&self) -> Vec2U32 {
         self.size
     }
 }
 
 pub(super) struct TexturePlacer {
-    size: UVec2,
+    size: Vec2U32,
     free_rects: Vec<Rect>,
     last_id: u32,
 }
 
 impl TexturePlacer {
-    pub fn new(starting_size: impl Into<UVec2>) -> Self {
+    pub fn new(starting_size: impl Into<Vec2U32>) -> Self {
         let starting_size = starting_size.into();
         if starting_size.x() & 1 != 0 || starting_size.y() & 1 != 0 {
             panic!("Atlas cannot have non power of two dimensions!");
         }
         Self {
             size: starting_size,
-            free_rects: vec![Rect(UVec2::ZERO, starting_size, 0)],
+            free_rects: vec![Rect(Vec2U32::ZERO, starting_size, 0)],
             last_id: 0,
         }
     }
@@ -77,7 +78,7 @@ impl TexturePlacer {
         self.last_id
     }
 
-    pub fn place(&mut self, size: impl Into<UVec2>) -> RawTextureInfo {
+    pub fn place(&mut self, size: impl Into<Vec2U32>) -> RawTextureInfo {
         let size = size.into();
         loop {
             if let Some(rect) = self.find_best_rect(size) {
@@ -101,14 +102,14 @@ impl TexturePlacer {
     fn duplicate_size(&mut self) {
         let old_size = self.size;
         self.size *= 2;
-        let right = Rect(UVec2::new(old_size.x(), 0), UVec2::new(self.size.x(), old_size.y()), self.next_id());
-        let bottom = Rect(UVec2::new(0, old_size.y()), self.size, self.next_id());
+        let right = Rect(Vec2U32::new(old_size.x(), 0), Vec2U32::new(self.size.x(), old_size.y()), self.next_id());
+        let bottom = Rect(Vec2U32::new(0, old_size.y()), self.size, self.next_id());
         self.free_rects.push(right);
         self.free_rects.push(bottom);
         while self.merge_free_rects() {}
     }
 
-    fn find_best_rect(&self, size: impl Into<UVec2>) -> Option<Rect> {
+    fn find_best_rect(&self, size: impl Into<Vec2U32>) -> Option<Rect> {
         let size = size.into();
         self.free_rects
             .iter()
@@ -117,7 +118,7 @@ impl TexturePlacer {
             .copied()
     }
 
-    fn split_rect(&mut self, rect: Rect, size: impl Into<UVec2>) {
+    fn split_rect(&mut self, rect: Rect, size: impl Into<Vec2U32>) {
         let size = size.into();
         let (right, bottom) = if rect.width() <= rect.height() {
             (

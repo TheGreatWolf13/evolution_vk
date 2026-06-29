@@ -1,4 +1,5 @@
-﻿use crate::math::direction::Axis;
+﻿use crate::math::direction::{Axis2, Axis3, Axis4};
+use crate::{seq_literal, seq_literal_2};
 use std::ops::{Add, Mul, RangeBounds};
 
 pub mod angle;
@@ -7,19 +8,20 @@ pub mod block_pos;
 pub mod chunk_pos;
 pub mod color;
 pub mod direction;
-pub mod i8vec3;
-pub mod ivec2;
-pub mod ivec3;
 pub mod local_section_pos;
 pub mod mat3;
 pub mod mat4;
 pub mod quat;
 pub mod section_pos;
-pub mod u8vec3;
-pub mod uvec2;
-pub mod vec2;
-pub mod vec3;
-pub mod vec4;
+pub mod vec2f;
+pub mod vec2i;
+pub mod vec2u;
+pub mod vec3f;
+pub mod vec3i;
+pub mod vec3u;
+pub mod vec4f;
+pub mod vec4i;
+pub mod vec4u;
 
 #[macro_export]
 macro_rules! impl_assign {
@@ -112,8 +114,53 @@ impl<M: Mul<f32, Output = Self> + Add<Output = Self> + Copy> Lerp for M {
     }
 }
 
+pub trait Vector2 {
+    type T: MinMax;
+    const X: Self;
+    const Y: Self;
+
+    #[must_use]
+    fn x(&self) -> Self::T;
+
+    #[must_use]
+    fn y(&self) -> Self::T;
+
+    #[must_use]
+    fn x_mut(&mut self) -> &mut Self::T;
+
+    #[must_use]
+    fn y_mut(&mut self) -> &mut Self::T;
+
+    #[inline(always)]
+    #[must_use]
+    fn get(&self, axis: Axis2) -> Self::T {
+        match axis {
+            Axis2::X => self.x(),
+            Axis2::Y => self.y(),
+        }
+    }
+
+    #[inline(always)]
+    #[must_use]
+    fn get_mut(&mut self, axis: Axis2) -> &mut Self::T {
+        match axis {
+            Axis2::X => self.x_mut(),
+            Axis2::Y => self.y_mut(),
+        }
+    }
+
+    #[inline(always)]
+    #[must_use]
+    fn map<S, V: From<(S, S)>>(&self, f: impl Fn(Self::T) -> S) -> V {
+        (f(self.x()), f(self.y())).into()
+    }
+}
+
 pub trait Vector3 {
-    type T;
+    type T: MinMax;
+    const X: Self;
+    const Y: Self;
+    const Z: Self;
 
     #[must_use]
     fn x(&self) -> Self::T;
@@ -133,70 +180,91 @@ pub trait Vector3 {
     #[must_use]
     fn z_mut(&mut self) -> &mut Self::T;
 
-    fn get(&self, axis: Axis) -> Self::T {
+    #[inline(always)]
+    #[must_use]
+    fn get(&self, axis: Axis3) -> Self::T {
         match axis {
-            Axis::X => self.x(),
-            Axis::Y => self.y(),
-            Axis::Z => self.z(),
+            Axis3::X => self.x(),
+            Axis3::Y => self.y(),
+            Axis3::Z => self.z(),
         }
     }
 
-    fn get_mut(&mut self, axis: Axis) -> &mut Self::T {
+    #[inline(always)]
+    #[must_use]
+    fn get_mut(&mut self, axis: Axis3) -> &mut Self::T {
         match axis {
-            Axis::X => self.x_mut(),
-            Axis::Y => self.y_mut(),
-            Axis::Z => self.z_mut(),
+            Axis3::X => self.x_mut(),
+            Axis3::Y => self.y_mut(),
+            Axis3::Z => self.z_mut(),
         }
     }
 
-    fn map<S>(&self, f: impl Fn(Self::T) -> S) -> (S, S, S) {
-        (f(self.x()), f(self.y()), f(self.z()))
+    #[inline(always)]
+    #[must_use]
+    fn map<S, V: From<(S, S, S)>>(&self, f: impl Fn(Self::T) -> S) -> V {
+        (f(self.x()), f(self.y()), f(self.z())).into()
     }
 }
 
-#[macro_export]
-macro_rules! impl_vec3 {
-    ($ty:ty: $c:ty => $acc:tt $x:ident $y:ident $z:ident) => {
-        impl crate::math::Vector3 for $ty {
-            type T = $c;
+pub trait Vector4 {
+    type T: MinMax;
+    const X: Self;
+    const Y: Self;
+    const Z: Self;
+    const W: Self;
 
-            #[inline]
-            fn x(&self) -> Self::T {
-                self.$acc.$x
-            }
+    #[must_use]
+    fn x(&self) -> Self::T;
 
-            #[inline]
-            fn y(&self) -> Self::T {
-                self.$acc.$y
-            }
+    #[must_use]
+    fn y(&self) -> Self::T;
 
-            #[inline]
-            fn z(&self) -> Self::T {
-                self.$acc.$z
-            }
+    #[must_use]
+    fn z(&self) -> Self::T;
 
-            #[inline]
-            fn x_mut(&mut self) -> &mut Self::T {
-                &mut self.$acc.$x
-            }
+    #[must_use]
+    fn w(&self) -> Self::T;
 
-            #[inline]
-            fn y_mut(&mut self) -> &mut Self::T {
-                &mut self.$acc.$y
-            }
+    #[must_use]
+    fn x_mut(&mut self) -> &mut Self::T;
 
-            #[inline]
-            fn z_mut(&mut self) -> &mut Self::T {
-                &mut self.$acc.$z
-            }
+    #[must_use]
+    fn y_mut(&mut self) -> &mut Self::T;
+
+    #[must_use]
+    fn z_mut(&mut self) -> &mut Self::T;
+
+    #[must_use]
+    fn w_mut(&mut self) -> &mut Self::T;
+
+    #[inline(always)]
+    #[must_use]
+    fn get(&self, axis: Axis4) -> Self::T {
+        match axis {
+            Axis4::X => self.x(),
+            Axis4::Y => self.y(),
+            Axis4::Z => self.z(),
+            Axis4::W => self.w(),
         }
+    }
 
-        impl std::fmt::Debug for $ty {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_str(&format!("({:?}, {:?}, {:?})", self.x(), self.y(), self.z()))
-            }
+    #[inline(always)]
+    #[must_use]
+    fn get_mut(&mut self, axis: Axis4) -> &mut Self::T {
+        match axis {
+            Axis4::X => self.x_mut(),
+            Axis4::Y => self.y_mut(),
+            Axis4::Z => self.z_mut(),
+            Axis4::W => self.w_mut(),
         }
-    };
+    }
+
+    #[inline(always)]
+    #[must_use]
+    fn map<S, V: From<(S, S, S, S)>>(&self, f: impl Fn(Self::T) -> S) -> V {
+        (f(self.x()), f(self.y()), f(self.z()), f(self.w())).into()
+    }
 }
 
 pub trait MinMax {
@@ -205,15 +273,29 @@ pub trait MinMax {
     fn max(self, other: Self) -> Self;
 }
 
-impl MinMax for f32 {
-    fn min(self, other: Self) -> Self {
-        self.min(other)
-    }
+seq_literal!(N in (32, 64) {
+    impl MinMax for f~N {
+        fn min(self, other: Self) -> Self {
+            self.min(other)
+        }
 
-    fn max(self, other: Self) -> Self {
-        self.max(other)
+        fn max(self, other: Self) -> Self {
+            self.max(other)
+        }
     }
-}
+});
+
+seq_literal_2!(M in ("i", "u") and N in (8, 16, 32, 64, 128) {
+    impl MinMax for [<M N>] {
+        fn min(self, other: Self) -> Self {
+            Ord::min(self, other)
+        }
+
+        fn max(self, other: Self) -> Self {
+            Ord::max(self, other)
+        }
+    }
+});
 
 pub trait InRange {
     type T;
@@ -234,17 +316,11 @@ macro_rules! impl_range {
     };
 }
 
+seq_literal!(N in (8, 16, 32, 64, 128) {
+    impl_range!(u~N);
+    impl_range!(i~N);
+});
 impl_range!(f32);
 impl_range!(f64);
-impl_range!(i8);
-impl_range!(i16);
-impl_range!(i32);
-impl_range!(i64);
-impl_range!(i128);
-impl_range!(u8);
-impl_range!(u16);
-impl_range!(u32);
-impl_range!(u64);
-impl_range!(u128);
 impl_range!(usize);
 impl_range!(isize);

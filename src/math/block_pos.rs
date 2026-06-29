@@ -1,13 +1,13 @@
-﻿use crate::level::chunk::Section;
-use crate::math::ivec3::IVec3;
+﻿use crate::impl_from;
+use crate::level::chunk::Section;
 use crate::math::local_section_pos::{LocalSectionPos, Range};
+use crate::math::vec3i::Vec3I32;
 use crate::math::Vector3;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
-use crate::impl_from;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
-pub struct BlockPos(IVec3);
+pub struct BlockPos(Vec3I32);
 
 impl Debug for BlockPos {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -15,13 +15,13 @@ impl Debug for BlockPos {
     }
 }
 
-impl_from!(BlockPos as IVec3: pos => pos.0);
+impl_from!(BlockPos as Vec3I32: pos => pos.0);
 
 impl BlockPos {
     #[inline(always)]
     #[must_use]
     pub fn new(x: i32, y: i32, z: i32) -> Self {
-        Self(IVec3::new(x, y, z))
+        Self(Vec3I32::new(x, y, z))
     }
 
     #[inline(always)]

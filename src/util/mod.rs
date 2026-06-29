@@ -57,7 +57,27 @@ macro_rules! if_else {
 
 #[macro_export]
 macro_rules! seq_literal {
-    ($n: ident => ($($l:literal),+) $b:tt) => {
+    ($n: ident in ($($l:literal),+) $b:tt) => {
         super_seq_macro::seq!($n in (0..[$($l),+].len()).collect().map(|i| [$($l),+][i]) $b);
+    };
+}
+
+#[macro_export]
+macro_rules! seq_literal_1 {
+    ($n: ident in ($($l:literal),+) $b:tt) => {
+        crate::seq_literal!($n in ($($l),+) {
+            paste::paste! $b
+        });
+    };
+}
+
+#[macro_export]
+macro_rules! seq_literal_2 {
+    ($m: ident in ($($l1:literal),+) and $n:ident in ($($l2:literal),+) $b:tt) => {
+        crate::seq_literal!($m in ($($l1),+) {
+            crate::seq_literal!($n in ($($l2),+) {
+                paste::paste! $b
+            });
+        });
     };
 }

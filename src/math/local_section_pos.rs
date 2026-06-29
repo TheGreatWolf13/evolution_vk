@@ -1,6 +1,6 @@
 ﻿use crate::level::chunk::Section;
-use crate::math::direction::{Axis, Direction};
-use crate::math::i8vec3::I8Vec3;
+use crate::math::direction::{Axis3, Direction3};
+use crate::math::vec3i::Vec3I8;
 use crate::math::Vector3;
 use crate::util::Utils;
 use enum_iterator::all;
@@ -9,7 +9,7 @@ use std::fmt;
 use std::fmt::{Debug, Formatter};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
-pub struct LocalSectionPos(I8Vec3);
+pub struct LocalSectionPos(Vec3I8);
 
 pub type Range = RangedI8<0, { Section::MASK }>;
 
@@ -23,7 +23,7 @@ impl LocalSectionPos {
     #[inline(always)]
     #[must_use]
     pub fn new(x: Range, y: Range, z: Range) -> Self {
-        Self(I8Vec3::new(x.inner(), y.inner(), z.inner()))
+        Self(Vec3I8::new(x.inner(), y.inner(), z.inner()))
     }
 
     #[inline(always)]
@@ -44,12 +44,12 @@ impl LocalSectionPos {
         self.0.z()
     }
 
-    pub fn offset(&self, dir: Direction) -> Self {
-        Self(self.0 + dir.get_offset().map(|c| c as i8))
+    pub fn offset(&self, dir: Direction3) -> Self {
+        Self(self.0 + dir.get_offset::<Vec3I8>())
     }
 
     pub fn is_out_of_range(&self) -> bool {
-        for axis in all::<Axis>() {
+        for axis in all::<Axis3>() {
             if self.0.get(axis) < 0 || self.0.get(axis) >= Section::SIZE {
                 return true;
             }

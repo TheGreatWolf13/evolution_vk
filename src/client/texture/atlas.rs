@@ -1,7 +1,7 @@
 ﻿use crate::client::texture::placer::TexturePlacer;
-use crate::math::uvec2::UVec2;
-use crate::math::vec2::Vec2;
-use crate::math::PaP;
+use crate::math::vec2f::Vec2F32;
+use crate::math::vec2u::Vec2U32;
+use crate::math::{PaP, Vector2};
 use image::{ExtendedColorType, ImageFormat, Rgba, RgbaImage};
 use light_ranged_integers::RangedU8;
 use log::warn;
@@ -11,12 +11,12 @@ use std::env::current_dir;
 #[derive(Copy, Clone, Debug)]
 pub struct TextureInfo {
     id: TextureId,
-    uv0: Vec2,
-    uv1: Vec2,
+    uv0: Vec2F32,
+    uv1: Vec2F32,
 }
 
 #[derive(Copy, Clone)]
-pub struct RawTextureInfo(pub UVec2, pub UVec2);
+pub struct RawTextureInfo(pub Vec2U32, pub Vec2U32);
 
 impl PartialEq for TextureInfo {
     fn eq(&self, other: &Self) -> bool {
@@ -125,7 +125,7 @@ impl AtlasBuilder {
 }
 
 impl TextureInfo {
-    pub fn new(id: TextureId, uv0: Vec2, uv1: Vec2) -> Self {
+    pub fn new(id: TextureId, uv0: Vec2F32, uv1: Vec2F32) -> Self {
         Self {
             id,
             uv0,
@@ -133,23 +133,23 @@ impl TextureInfo {
         }
     }
 
-    pub fn get_00(&self) -> Vec2 {
+    pub fn get_00(&self) -> Vec2F32 {
         self.uv0
     }
 
-    pub fn get_01(&self) -> Vec2 {
-        Vec2::new(self.uv0.x(), self.uv1.y())
+    pub fn get_01(&self) -> Vec2F32 {
+        Vec2F32::new(self.uv0.x(), self.uv1.y())
     }
 
-    pub fn get_10(&self) -> Vec2 {
-        Vec2::new(self.uv1.x(), self.uv0.y())
+    pub fn get_10(&self) -> Vec2F32 {
+        Vec2F32::new(self.uv1.x(), self.uv0.y())
     }
 
-    pub fn get_11(&self) -> Vec2 {
+    pub fn get_11(&self) -> Vec2F32 {
         self.uv1
     }
 
-    pub fn get_raw(&self, index: RangedU8<0, 3>) -> Vec2 {
+    pub fn get_raw(&self, index: RangedU8<0, 3>) -> Vec2F32 {
         match index.inner() {
             0 => self.get_00(),
             1 => self.get_01(),
@@ -159,14 +159,14 @@ impl TextureInfo {
         }
     }
 
-    pub fn get_mapped(&self, index: RangedU8<0, 3>, uv: (Vec2, Vec2)) -> Vec2 {
+    pub fn get_mapped(&self, index: RangedU8<0, 3>, uv: (Vec2F32, Vec2F32)) -> Vec2F32 {
         let u = PaP(self.uv0.x(), self.uv1.x());
         let v = PaP(self.uv0.y(), self.uv1.y());
         match index.inner() {
-            0 => Vec2::new(u.lerp(uv.0.x()), v.lerp(uv.0.y())),
-            1 => Vec2::new(u.lerp(uv.0.x()), v.lerp(uv.1.y())),
-            2 => Vec2::new(u.lerp(uv.1.x()), v.lerp(uv.0.y())),
-            3 => Vec2::new(u.lerp(uv.1.x()), v.lerp(uv.1.y())),
+            0 => Vec2F32::new(u.lerp(uv.0.x()), v.lerp(uv.0.y())),
+            1 => Vec2F32::new(u.lerp(uv.0.x()), v.lerp(uv.1.y())),
+            2 => Vec2F32::new(u.lerp(uv.1.x()), v.lerp(uv.0.y())),
+            3 => Vec2F32::new(u.lerp(uv.1.x()), v.lerp(uv.1.y())),
             _ => unreachable!(),
         }
     }

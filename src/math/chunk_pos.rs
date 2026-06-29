@@ -1,14 +1,15 @@
-﻿use crate::math::ivec2::IVec2;
-use crate::math::section_pos::SectionPos;
+﻿use crate::math::section_pos::SectionPos;
+use crate::math::vec2i::Vec2I32;
+use crate::math::Vector2;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
-pub struct ChunkPos(IVec2);
+pub struct ChunkPos(Vec2I32);
 
 impl Debug for ChunkPos {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&format!("ChunkPos({:?}, {:?})", self.x(), self.z()))
+        f.write_str(&format!("ChunkPos({:?}, {:?})", self.x(), self.y()))
     }
 }
 
@@ -16,34 +17,34 @@ impl ChunkPos {
     #[inline(always)]
     #[must_use]
     pub fn new(x: i32, z: i32) -> Self {
-        Self(IVec2::new(x, z))
+        Self(Vec2I32::new(x, z))
     }
 
     #[inline(always)]
     #[must_use]
-    pub const fn x(&self) -> i32 {
+    pub fn x(&self) -> i32 {
         self.0.x()
     }
 
     #[inline(always)]
     #[must_use]
-    pub const fn z(&self) -> i32 {
+    pub fn y(&self) -> i32 {
         self.0.y()
     }
 
     #[inline(always)]
     #[must_use]
-    pub const fn x_mut(&mut self) -> &mut i32 {
+    pub fn x_mut(&mut self) -> &mut i32 {
         self.0.x_mut()
     }
 
     #[inline(always)]
     #[must_use]
-    pub const fn z_mut(&mut self) -> &mut i32 {
+    pub fn y_mut(&mut self) -> &mut i32 {
         self.0.y_mut()
     }
 
-    pub fn with_section_y(self, y: i32) -> SectionPos {
-        SectionPos::new(self.x(), y, self.z())
+    pub fn with_section_z(self, z: i32) -> SectionPos {
+        SectionPos::new(self.x(), self.y(), z)
     }
 }

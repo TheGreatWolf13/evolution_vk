@@ -4,14 +4,15 @@ use crate::client::camera::Camera;
 use crate::client::input::keybinding::{BindingType, Keybinding};
 use crate::if_else;
 use crate::math::angle::{AngleDeg, Rot3Deg};
-use crate::math::vec2::Vec2;
+use crate::math::vec2f::Vec2F32;
+use crate::math::Vector2;
 use enum_map::{enum_map, EnumMap};
 use winit::event::{ElementState, KeyEvent, MouseButton};
 use winit::keyboard::KeyCode;
 
 pub struct Input {
     bindings: EnumMap<BindingType, Keybinding>,
-    rot: Vec2,
+    rot: Vec2F32,
 }
 
 pub trait InputHandler {
@@ -33,7 +34,7 @@ impl Input {
                 BindingType::ToggleGrabMouse => Keybinding::new(KeyCode::AltLeft),
                 BindingType::ToggleWireframe => Keybinding::new(KeyCode::F6),
             },
-            rot: Vec2::ZERO,
+            rot: Vec2F32::ZERO,
         }
     }
 
@@ -52,7 +53,7 @@ impl Input {
         camera.r#move((left, up, forward));
         self.rot *= SENSITIVITY;
         camera.rotate(Rot3Deg::new(AngleDeg::new(self.rot.x()), AngleDeg::new(self.rot.y()), AngleDeg::ZERO));
-        self.rot = Vec2::ZERO;
+        self.rot = Vec2F32::ZERO;
         while self.bindings[BindingType::ToggleGrabMouse].consume_click() {
             handler.toggle_grab_mouse();
         }

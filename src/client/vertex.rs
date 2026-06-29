@@ -1,4 +1,4 @@
-﻿use crate::math::mat4::Mat4;
+﻿use crate::math::mat4::Mat4F32;
 use std::fmt::Debug;
 use std::sync::Arc;
 use vulkano::buffer::BufferContents;
@@ -12,7 +12,7 @@ pub trait VertexFormat: BufferContents + VertexLayout + Copy + Debug {
 
     fn load_shaders(device: Arc<Device>) -> (Arc<ShaderModule>, Arc<ShaderModule>);
 
-    fn transform(self, matrix: Mat4) -> Self;
+    fn transform(self, matrix: Mat4F32) -> Self;
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -78,7 +78,7 @@ impl VertexPos {
 mod vpc {
     use crate::client::camera::CameraUniform;
     use crate::client::vertex::{VertexFormat, VertexPosCol};
-    use crate::math::mat4::Mat4;
+    use crate::math::mat4::Mat4F32;
     use std::sync::Arc;
     use vulkano::device::Device;
     use vulkano::shader::ShaderModule;
@@ -91,7 +91,7 @@ mod vpc {
             (vs::load(device.clone()).unwrap(), fs::load(device).unwrap())
         }
 
-        fn transform(self, matrix: Mat4) -> Self {
+        fn transform(self, matrix: Mat4F32) -> Self {
             Self {
                 pos: matrix.transform(self.pos.into()).into(),
                 color: self.color,
@@ -99,7 +99,7 @@ mod vpc {
         }
     }
 
-    impl Into<vs::Transform> for Mat4 {
+    impl Into<vs::Transform> for Mat4F32 {
         fn into(self) -> vs::Transform {
             vs::Transform {
                 world: self.into()
@@ -165,7 +165,7 @@ mod vpc {
 mod vpt {
     use crate::client::camera::CameraUniform;
     use crate::client::vertex::{VertexFormat, VertexPosTex};
-    use crate::math::mat4::Mat4;
+    use crate::math::mat4::Mat4F32;
     use std::sync::Arc;
     use vulkano::device::Device;
     use vulkano::shader::ShaderModule;
@@ -178,7 +178,7 @@ mod vpt {
             (vs::load(device.clone()).unwrap(), fs::load(device).unwrap())
         }
 
-        fn transform(self, matrix: Mat4) -> Self {
+        fn transform(self, matrix: Mat4F32) -> Self {
             Self {
                 pos: matrix.transform(self.pos.into()).into(),
                 uv: self.uv,
@@ -186,7 +186,7 @@ mod vpt {
         }
     }
 
-    impl Into<vs::Transform> for Mat4 {
+    impl Into<vs::Transform> for Mat4F32 {
         fn into(self) -> vs::Transform {
             vs::Transform {
                 world: self.into(),

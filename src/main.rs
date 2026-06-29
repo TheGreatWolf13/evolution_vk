@@ -1,12 +1,16 @@
 extern crate alloc;
 extern crate core;
 
+use crate::math::Vector2;
+
 use crate::block::Blocks;
 use crate::client::camera::Camera;
 use crate::client::engine::GraphicsEngine;
 use crate::client::input::Input;
 use crate::client::resources::ResourceManager;
 use crate::level::Level;
+use crate::math::vec2f::Vec2F32;
+use crate::math::vec2u::Vec2U32;
 use crate::util::timer::{FrameRateLimit, Timer};
 use itertools::Itertools;
 use log::info;
@@ -124,7 +128,7 @@ impl ApplicationHandler for Game {
                         let min_y_section = data.level.get_min_y_section();
                         let meshes = data.level.get_chunks_mut().flat_map(|(pos, c)| c.get_sections_mut().iter_mut().flat_map(|s| s.remesh(*pos, min_y_section, data.resource_manager.get_model_manager()))).collect::<Vec<_>>();
                         engine.update_section_meshes(meshes);
-                        data.camera.adjust(engine.get_window().inner_size(), partial_tick);
+                        data.camera.adjust(Vec2U32::from(engine.get_window().inner_size()).map::<_, Vec2F32>(|x| x as f32), partial_tick);
                         engine.update_fps(data.camera.get_pos());
                         engine.resize_or_update_swapchain();
                         engine.render_game(&data.level, &data.camera);

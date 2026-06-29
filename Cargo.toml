@@ -27,6 +27,7 @@ itertools = "0.14.0"
 bitvec = "1.0.1"
 enum-iterator = "2.3.0"
 super-seq-macro = "0.3.8"
+subenum = "1.2.0"
 
 [profile.dev]
 opt-level = 1

@@ -1,10 +1,10 @@
-﻿use crate::client::model::BakedModel;
+﻿use crate::client::model::{get_horizontal_neighbours, get_vertical_neighbours, BakedModel};
 use crate::client::texture::{TextureInfo, TextureManager, TextureResolver};
 use crate::client::vertex::{Vertex, VertexPosTex};
-use crate::math::direction::Direction;
-use crate::math::quat::Quat;
-use crate::math::vec2::Vec2;
-use crate::math::vec3::Vec3;
+use crate::math::direction::Direction3;
+use crate::math::quat::Quat32;
+use crate::math::vec2f::Vec2F32;
+use crate::math::vec3f::Vec3F32;
 use enum_map::EnumMap;
 use itertools::Either;
 use log::warn;
@@ -20,18 +20,18 @@ pub(super) struct RawModel {
 
 #[derive(Debug)]
 struct Element {
-    from: Vec3,
-    to: Vec3,
+    from: Vec3F32,
+    to: Vec3F32,
     rot: Option<Rotation>,
-    faces: EnumMap<Direction, Option<Face>>,
+    faces: EnumMap<Direction3, Option<Face>>,
 }
 
 struct TextureHolder(HashMap<TextureVar, Either<Option<String>, TextureVar>>);
 
 #[derive(Debug)]
 pub(super) struct Face {
-    uv: (Vec2, Vec2),
-    cullface: Option<Direction>,
+    uv: (Vec2F32, Vec2F32),
+    cullface: Option<Direction3>,
     texture: TextureVar,
 }
 
@@ -39,7 +39,7 @@ pub(super) struct Face {
 pub(super) struct TextureVar(String);
 
 #[derive(Debug)]
-pub(super) struct Rotation(Quat);
+pub(super) struct Rotation(Quat32);
 
 pub(super) struct RawModelBuilder {
     id: String,
@@ -57,17 +57,17 @@ pub(super) struct RawModelBuilderTextureElement {
 }
 
 impl RawModel {
-    fn _bake_face(vertices: &mut Vec<VertexPosTex>, indices: &mut Vec<u32>, from: Vec3, to: Vec3, dir: Direction, uv: (Vec2, Vec2), texture: TextureInfo) {
+    fn _bake_face(vertices: &mut Vec<VertexPosTex>, indices: &mut Vec<u32>, from: Vec3F32, to: Vec3F32, dir: Direction3, uv: (Vec2F32, Vec2F32), texture: TextureInfo) {
         let uv = uv.map(|v| v * (1.0 / 16.0));
         let index = vertices.len() as u32;
         indices.extend([index, index + 1, index + 2, index + 1, index + 3, index + 2]);
         let from = dir.choose(from, to);
         let to = dir.choose(to, from);
         let mut index = 0;
-        for horiz in dir.get_horizontal_neighbours() {
+        for horiz in get_horizontal_neighbours(dir) {
             let from = horiz.choose(from, to);
             let to = horiz.choose(to, from);
-            for vert in dir.get_vertical_neighbours() {
+            for vert in get_vertical_neighbours(dir) {
                 vertices.push(Vertex::new().pos(vert.choose(from, to)).uv(texture.get_mapped(index.into(), uv)));
                 index += 1;
             }
@@ -201,7 +201,7 @@ impl RawModelBuilderTexture {
 }
 
 impl RawModelBuilderTextureElement {
-    pub fn add_element(mut self, from: impl Into<Vec3>, to: impl Into<Vec3>, rot: Option<Rotation>, f: impl Fn(&mut Self, Direction) -> Option<Face>) -> Self {
+    pub fn add_element(mut self, from: impl Into<Vec3F32>, to: impl Into<Vec3F32>, rot: Option<Rotation>, f: impl Fn(&mut Self, Direction3) -> Option<Face>) -> Self {
         let element = Element {
             from: from.into(),
             to: to.into(),
@@ -212,13 +212,13 @@ impl RawModelBuilderTextureElement {
         self
     }
 
-    pub fn add_face(&self, texture: impl Into<String>, cullface: Option<Direction>) -> Face {
+    pub fn add_face(&self, texture: impl Into<String>, cullface: Option<Direction3>) -> Face {
         let var = TextureVar(texture.into());
         if !self.textures.0.contains_key(&var) {
             panic!("TextureVar {:?} not found on model {:?}!", var.0, self.id);
         }
         Face {
-            uv: (Vec2::new(0.0, 0.0), Vec2::new(16.0, 16.0)),
+            uv: (Vec2F32::new(0.0, 0.0), Vec2F32::new(16.0, 16.0)),
             texture: var,
             cullface,
         }

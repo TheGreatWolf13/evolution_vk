@@ -2,8 +2,8 @@
 use crate::client::model::BakedModel;
 use crate::client::vertex::{Vertex, VertexFormat, VertexPosTex};
 use crate::math::bitvec::{BitVec, BitVec8};
-use crate::math::direction::Direction;
-use crate::math::mat4::Mat4;
+use crate::math::direction::Direction3;
+use crate::math::mat4::Mat4F32;
 use crate::math::section_pos::SectionPos;
 use enum_iterator::all;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ pub struct Mesh<V: VertexFormat> {
 pub struct MeshBuilder<V: VertexFormat> {
     vertex_buffer: Vec<V>,
     index_buffer: Vec<u32>,
-    local_transform: Mat4,
+    local_transform: Mat4F32,
 }
 
 #[derive(Debug)]
@@ -53,17 +53,17 @@ impl<V: VertexFormat> MeshBuilder<V> {
         Self {
             vertex_buffer: vec![],
             index_buffer: vec![],
-            local_transform: Mat4::IDENTITY,
+            local_transform: Mat4F32::IDENTITY,
         }
     }
 
-    pub fn local_transform(mut self, local_transform: Mat4) -> Self {
+    pub fn local_transform(mut self, local_transform: Mat4F32) -> Self {
         self.local_transform = local_transform;
         self
     }
 
     pub fn reset_local_transform(mut self) -> Self {
-        self.local_transform = Mat4::IDENTITY;
+        self.local_transform = Mat4F32::IDENTITY;
         self
     }
 
@@ -167,7 +167,7 @@ impl MeshBuilder<VertexPosTex> {
         let data = model.get_data(None);
         self.index_buffer.extend(data.1.iter().map(|i| i + last_index));
         self.vertex_buffer.extend(data.0.iter().map(|v| v.transform(self.local_transform)));
-        for (i, dir) in all::<Direction>().enumerate() {
+        for (i, dir) in all::<Direction3>().enumerate() {
             if faces.get_at(i) {
                 let last_index = self.vertex_buffer.len() as u32;
                 let data = model.get_data(Some(dir));

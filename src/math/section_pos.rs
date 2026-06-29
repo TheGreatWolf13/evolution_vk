@@ -1,14 +1,14 @@
-﻿use std::fmt;
-use std::fmt::{Debug, Formatter};
-use crate::math::ivec3::IVec3;
+﻿use crate::math::vec3i::Vec3I32;
 use crate::math::Vector3;
+use std::fmt;
+use std::fmt::{Debug, Formatter};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
-pub struct SectionPos(IVec3);
+pub struct SectionPos(Vec3I32);
 
 impl Debug for SectionPos {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&format!("SectionPos({:?}, {:?}, {:?})", self.x(), self.y(), self.z()))
+        f.write_str(&format!("SectionPos({}, {}, {})", self.x(), self.y(), self.z()))
     }
 }
 
@@ -16,7 +16,7 @@ impl SectionPos {
     #[inline(always)]
     #[must_use]
     pub fn new(x: i32, y: i32, z: i32) -> Self {
-        Self(IVec3::new(x, y, z))
+        Self(Vec3I32::new(x, y, z))
     }
 
     #[inline(always)]

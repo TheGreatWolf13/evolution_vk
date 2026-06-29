@@ -1,15 +1,16 @@
-﻿use crate::math::uvec2::UVec2;
+﻿use crate::math::vec2u::Vec2U32;
+use crate::math::Vector2;
 use log::info;
 
 pub(super) struct WindowParams {
-    size: UVec2,
+    size: Vec2U32,
     is_minimized: bool,
     should_resize: bool,
     window_focused: bool,
 }
 
 impl WindowParams {
-    pub(super) fn new(size: impl Into<UVec2>) -> Self {
+    pub(super) fn new(size: impl Into<Vec2U32>) -> Self {
         Self {
             size: size.into(),
             is_minimized: false,
@@ -18,7 +19,7 @@ impl WindowParams {
         }
     }
 
-    pub(super) fn changed_size(&mut self, size: impl Into<UVec2>) {
+    pub(super) fn changed_size(&mut self, size: impl Into<Vec2U32>) {
         let size = size.into();
         if size.x() == 0 || size.y() == 0 {
             self.is_minimized = true;

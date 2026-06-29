@@ -4,8 +4,8 @@ use crate::block::{Block, BlockId, Blocks};
 use crate::client::model::raw_model::RawModel;
 use crate::client::texture::{TextureInfo, TextureManager, TextureResolver};
 use crate::client::vertex::{Vertex, VertexPosTex};
-use crate::math::direction::Direction;
-use crate::math::vec3::Vec3;
+use crate::math::direction::Direction3;
+use crate::math::vec3f::Vec3F32;
 use crate::Block;
 use enum_map::{enum_map, Enum, EnumMap};
 use log::warn;
@@ -23,7 +23,7 @@ pub(super) struct ModelLoader {
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Enum)]
 enum Cullface {
     None,
-    Some(Direction),
+    Some(Direction3),
 }
 
 pub struct BakedModel {
@@ -112,12 +112,12 @@ impl ModelManager {
             missing_model: BakedModel {
                 geometry: enum_map! {
                     Cullface::None => (vec![], vec![]),
-                    Cullface::Some(Direction::North) => Self::get_face((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), Direction::North, missing),
-                    Cullface::Some(Direction::East) => Self::get_face((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), Direction::East, missing),
-                    Cullface::Some(Direction::South) => Self::get_face((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), Direction::South, missing),
-                    Cullface::Some(Direction::West) => Self::get_face((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), Direction::West, missing),
-                    Cullface::Some(Direction::Up) => Self::get_face((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), Direction::Up, missing),
-                    Cullface::Some(Direction::Down) => Self::get_face((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), Direction::Down, missing),
+                    Cullface::Some(Direction3::North) => Self::get_face((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), Direction3::North, missing),
+                    Cullface::Some(Direction3::East) => Self::get_face((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), Direction3::East, missing),
+                    Cullface::Some(Direction3::South) => Self::get_face((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), Direction3::South, missing),
+                    Cullface::Some(Direction3::West) => Self::get_face((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), Direction3::West, missing),
+                    Cullface::Some(Direction3::Up) => Self::get_face((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), Direction3::Up, missing),
+                    Cullface::Some(Direction3::Down) => Self::get_face((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), Direction3::Down, missing),
                 },
             },
             models,
@@ -128,7 +128,7 @@ impl ModelManager {
         &self.models.get(&block.get_id()).unwrap_or(&self.missing_model)
     }
 
-    fn get_face(from: impl Into<Vec3>, to: impl Into<Vec3>, dir: Direction, texture: TextureInfo) -> (Vec<VertexPosTex>, Vec<u32>) {
+    fn get_face(from: impl Into<Vec3F32>, to: impl Into<Vec3F32>, dir: Direction3, texture: TextureInfo) -> (Vec<VertexPosTex>, Vec<u32>) {
         let from = from.into();
         let to = to.into();
         let mut vertices = vec![];
@@ -136,10 +136,10 @@ impl ModelManager {
         let from = dir.choose(from, to);
         let to = dir.choose(to, from);
         let mut index = 0;
-        for horiz in dir.get_horizontal_neighbours() {
+        for horiz in get_horizontal_neighbours(dir) {
             let from = horiz.choose(from, to);
             let to = horiz.choose(to, from);
-            for vert in dir.get_vertical_neighbours() {
+            for vert in get_vertical_neighbours(dir) {
                 vertices.push(Vertex::new().pos(vert.choose(from, to)).uv(texture.get_raw(index.into())));
                 index += 1;
             }
@@ -149,17 +149,34 @@ impl ModelManager {
 }
 
 impl BakedModel {
-    pub fn get_data(&self, cullface: Option<Direction>) -> &(Vec<VertexPosTex>, Vec<u32>) {
+    pub fn get_data(&self, cullface: Option<Direction3>) -> &(Vec<VertexPosTex>, Vec<u32>) {
         &self.geometry[cullface.into()]
     }
 }
 
-impl From<Option<Direction>> for Cullface {
+impl From<Option<Direction3>> for Cullface {
     #[inline(always)]
-    fn from(direction: Option<Direction>) -> Self {
+    fn from(direction: Option<Direction3>) -> Self {
         match direction {
             None => Cullface::None,
             Some(d) => Cullface::Some(d),
         }
+    }
+}
+
+pub fn get_horizontal_neighbours(dir: Direction3) -> [Direction3; 2] {
+    match dir {
+        Direction3::North => [Direction3::East, Direction3::West],
+        Direction3::East => [Direction3::South, Direction3::North],
+        Direction3::South | Direction3::Up | Direction3::Down => [Direction3::West, Direction3::East],
+        Direction3::West => [Direction3::North, Direction3::South],
+    }
+}
+
+pub fn get_vertical_neighbours(dir: Direction3) -> [Direction3; 2] {
+    match dir {
+        Direction3::North | Direction3::East | Direction3::South | Direction3::West => [Direction3::Up, Direction3::Down],
+        Direction3::Up => [Direction3::North, Direction3::South],
+        Direction3::Down => [Direction3::South, Direction3::North],
     }
 }

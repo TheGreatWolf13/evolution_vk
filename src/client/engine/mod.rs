@@ -18,9 +18,9 @@ use crate::client::texture::TextureManager;
 use crate::client::vertex::VertexPosTex;
 use crate::if_else;
 use crate::level::Level;
-use crate::math::mat4::Mat4;
-use crate::math::uvec2::UVec2;
-use crate::math::vec3::Vec3;
+use crate::math::mat4::Mat4F32;
+use crate::math::vec2u::Vec2U32;
+use crate::math::vec3f::Vec3F32;
 use crate::math::Vector3;
 use log::{error, info};
 use std::sync::Arc;
@@ -326,11 +326,11 @@ impl GraphicsEngine {
         self.window_params.set_focused(focused);
     }
 
-    pub fn changed_size(&mut self, size: impl Into<UVec2>) {
+    pub fn changed_size(&mut self, size: impl Into<Vec2U32>) {
         self.window_params.changed_size(size);
     }
 
-    pub fn update_fps(&mut self, player_pos: Vec3) {
+    pub fn update_fps(&mut self, player_pos: Vec3F32) {
         let now = Instant::now();
         let delta = now - self.last_frame;
         self.frames += 1;
@@ -437,7 +437,7 @@ impl GraphicsEngine {
         }
     }
 
-    fn render_level<const Y: usize>(&mut self, cb: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>, level: &Level<Y>) -> Vec<Mat4> {
+    fn render_level<const Y: usize>(&mut self, cb: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>, level: &Level<Y>) -> Vec<Mat4F32> {
         let min_y_section = level.get_min_y_section();
         let mut transforms = vec![];
         let mut draw_commands = vec![];

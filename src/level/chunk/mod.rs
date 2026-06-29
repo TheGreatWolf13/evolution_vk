@@ -5,9 +5,9 @@ use crate::client::vertex::VertexPosTex;
 use crate::level::chunk::palette::BlockPallet;
 use crate::math::bitvec::{BitVec, BitVec8};
 use crate::math::chunk_pos::ChunkPos;
-use crate::math::direction::Direction;
+use crate::math::direction::Direction3;
 use crate::math::local_section_pos::LocalSectionPos;
-use crate::math::mat4::Mat4;
+use crate::math::mat4::Mat4F32;
 use crate::math::section_pos::SectionPos;
 use crate::Block;
 use enum_iterator::all;
@@ -31,12 +31,12 @@ impl Section {
     pub const SIZE: i8 = 32;
     pub const MASK: i8 = Self::SIZE - 1;
 
-    pub fn get_transform(&self, pos: SectionPos) -> Mat4 {
-        Mat4::from_translation((pos.x() as f32 * Self::SIZE as f32, pos.y() as f32 * Self::SIZE as f32, pos.z() as f32 * Self::SIZE as f32))
+    pub fn get_transform(&self, pos: SectionPos) -> Mat4F32 {
+        Mat4F32::from_translation((pos.x() as f32 * Self::SIZE as f32, pos.y() as f32 * Self::SIZE as f32, pos.z() as f32 * Self::SIZE as f32))
     }
 
     pub fn get_pos(&self, chunk_pos: ChunkPos, min_y_section: i8) -> SectionPos {
-        chunk_pos.with_section_y(self.index as i32 + min_y_section as i32)
+        chunk_pos.with_section_z(self.index as i32 + min_y_section as i32)
     }
 
     pub fn get_mesh_region(&self) -> Option<&MappedRegion> {
@@ -53,7 +53,7 @@ impl Section {
                         let block = self.blocks.get_block_at(pos);
                         if block != Block!(AIR) {
                             let mut faces = BitVec8::new();
-                            for dir in all::<Direction>() {
+                            for dir in all::<Direction3>() {
                                 let neighbour_pos = pos.offset(dir);
                                 if neighbour_pos.is_out_of_range() || self.blocks.get_block_at(neighbour_pos) == Block!(AIR) {
                                     faces.push(true);
@@ -62,13 +62,13 @@ impl Section {
                                     faces.push(false);
                                 }
                             }
-                            builder = builder.local_transform(Mat4::from_translation((x as f32, y as f32, z as f32))).model(model_manager.get_model(block), faces);
+                            builder = builder.local_transform(Mat4F32::from_translation((x as f32, y as f32, z as f32))).model(model_manager.get_model(block), faces);
                         }
                     }
                 }
             }
             self.dirty = false;
-            Some(builder.build_section(pos.with_section_y(self.index as i32 + min_y_section as i32), &mut self.mesh_region))
+            Some(builder.build_section(pos.with_section_z(self.index as i32 + min_y_section as i32), &mut self.mesh_region))
         } //
         else {
             None
