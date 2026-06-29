@@ -9,7 +9,7 @@ pub struct ChunkPos(Vec2I32);
 
 impl Debug for ChunkPos {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&format!("ChunkPos({:?}, {:?})", self.x(), self.y()))
+        f.write_str(&format!("ChunkPos({}, {})", self.x(), self.y()))
     }
 }
 
