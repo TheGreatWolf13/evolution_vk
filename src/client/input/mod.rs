@@ -4,15 +4,15 @@ use crate::client::camera::Camera;
 use crate::client::input::keybinding::{BindingType, Keybinding};
 use crate::if_else;
 use crate::math::angle::{AngleDeg, Rot3Deg};
-use crate::math::vec2f::Vec2F32;
-use crate::math::Vector2;
+use crate::math::vec3f::Vec3F32;
+use crate::math::{Vector2, Vector3};
 use enum_map::{enum_map, EnumMap};
 use winit::event::{ElementState, KeyEvent, MouseButton};
 use winit::keyboard::KeyCode;
 
 pub struct Input {
     bindings: EnumMap<BindingType, Keybinding>,
-    rot: Vec2F32,
+    rot: Vec3F32,
 }
 
 pub trait InputHandler {
@@ -34,26 +34,26 @@ impl Input {
                 BindingType::ToggleGrabMouse => Keybinding::new(KeyCode::AltLeft),
                 BindingType::ToggleWireframe => Keybinding::new(KeyCode::F6),
             },
-            rot: Vec2F32::ZERO,
+            rot: Vec3F32::ZERO,
         }
     }
 
     pub fn tick(&mut self, camera: &mut Camera, handler: &mut impl InputHandler) {
         const SPEED: f32 = 0.1;
         const SENSITIVITY: f32 = 0.25;
-        let mut forward = if_else!(self.bindings[BindingType::MoveBackward].is_down_and_reset() => 1.0 ; 0.0);
-        forward += if_else!(self.bindings[BindingType::MoveForward].is_down_and_reset() => -1.0 ; 0.0);
-        forward *= SPEED;
-        let mut left = if_else!(self.bindings[BindingType::MoveRight].is_down_and_reset() => 1.0 ; 0.0);
-        left += if_else!(self.bindings[BindingType::MoveLeft].is_down_and_reset() => -1.0 ; 0.0);
-        left *= SPEED;
-        let mut up = if_else!(self.bindings[BindingType::MoveUp].is_down_and_reset() => 1.0 ; 0.0);
-        up += if_else!(self.bindings[BindingType::MoveDown].is_down_and_reset() => -1.0 ; 0.0);
-        up *= SPEED;
-        camera.r#move((left, up, forward));
+        let mut move_y = if_else!(self.bindings[BindingType::MoveForward].is_down_and_reset() => 1.0 ; 0.0);
+        move_y += if_else!(self.bindings[BindingType::MoveBackward].is_down_and_reset() => -1.0 ; 0.0);
+        move_y *= SPEED;
+        let mut move_x = if_else!(self.bindings[BindingType::MoveRight].is_down_and_reset() => 1.0 ; 0.0);
+        move_x += if_else!(self.bindings[BindingType::MoveLeft].is_down_and_reset() => -1.0 ; 0.0);
+        move_x *= SPEED;
+        let mut move_z = if_else!(self.bindings[BindingType::MoveUp].is_down_and_reset() => 1.0 ; 0.0);
+        move_z += if_else!(self.bindings[BindingType::MoveDown].is_down_and_reset() => -1.0 ; 0.0);
+        move_z *= SPEED;
+        camera.r#move((move_x, move_y, move_z));
         self.rot *= SENSITIVITY;
-        camera.rotate(Rot3Deg::new(AngleDeg::new(self.rot.x()), AngleDeg::new(self.rot.y()), AngleDeg::ZERO));
-        self.rot = Vec2F32::ZERO;
+        camera.rotate(Rot3Deg::new(AngleDeg::new(self.rot.x()), AngleDeg::new(self.rot.y()), AngleDeg::new(self.rot.z())));
+        self.rot = Vec3F32::ZERO;
         while self.bindings[BindingType::ToggleGrabMouse].consume_click() {
             handler.toggle_grab_mouse();
         }
@@ -71,7 +71,7 @@ impl Input {
     }
 
     pub fn process_mouse_motion(&mut self, delta: (f64, f64)) {
-        *self.rot.y_mut() -= delta.0 as f32;
+        *self.rot.z_mut() -= delta.0 as f32;
         *self.rot.x_mut() -= delta.1 as f32;
     }
 }

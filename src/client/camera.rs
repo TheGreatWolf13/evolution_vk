@@ -20,7 +20,7 @@ pub struct CameraUniform {
 impl Camera {
     pub fn new() -> Self {
         Self {
-            pos: PaP::new(Vec3F32::new(0.0, 2.0, 0.0)),
+            pos: PaP::new(Vec3F32::new(0.0, 0.0, 2.0)),
             rot: PaP::new(Rot3Deg::ZERO),
             view: Mat4F32::IDENTITY,
             proj: Mat4F32::IDENTITY,
@@ -30,7 +30,7 @@ impl Camera {
     pub fn adjust(&mut self, window_size: impl Into<Vec2F32>, partial_tick: f32) {
         let window_size = window_size.into();
         let quat = self.rot.lerp(partial_tick).to_quat();
-        self.view = Mat4F32::look_to(self.pos.lerp(partial_tick), quat * -Vec3F32::Z, quat * Vec3F32::Y);
+        self.view = Mat4F32::look_to(self.pos.lerp(partial_tick), quat * Vec3F32::Y, quat * Vec3F32::Z);
         self.proj = Mat4F32::perspective(AngleDeg::new(60.0), window_size.x() / window_size.y(), 0.0625, 1024.0);
     }
 
