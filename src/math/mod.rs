@@ -1,6 +1,7 @@
 ﻿use crate::math::direction::{Axis2, Axis3, Axis4};
-use crate::{seq_literal, seq_literal_2};
-use std::ops::{Add, Mul, RangeBounds};
+use crate::{seq_floats, seq_ints, seq_num_types};
+use std::any::Any;
+use std::ops::RangeBounds;
 
 pub mod angle;
 pub mod bitvec;
@@ -8,6 +9,7 @@ pub mod block_pos;
 pub mod chunk_pos;
 pub mod color;
 pub mod direction;
+pub mod lerp;
 pub mod local_section_pos;
 pub mod mat3;
 pub mod mat4;
@@ -82,36 +84,6 @@ macro_rules! impl_un_op {
             }
         }
     };
-}
-
-///Stands for "Past and Present", as it holds a past value and a present value.
-pub struct PaP<T>(pub T, pub T);
-
-impl<T: Copy> PaP<T> {
-    #[inline]
-    pub fn new(t: T) -> Self {
-        PaP(t, t)
-    }
-}
-
-impl<T: Lerp + Copy> PaP<T> {
-    #[inline]
-    pub fn lerp(&self, partial_tick: f32) -> T {
-        self.1.lerp(self.0, partial_tick)
-    }
-}
-
-pub trait Lerp {
-    fn lerp(&self, other: Self, t: f32) -> Self;
-}
-
-impl<M: Mul<f32, Output = Self> + Add<Output = Self> + Copy> Lerp for M {
-    #[inline]
-    fn lerp(&self, other: Self, t: f32) -> Self {
-        let now = *self * t;
-        let prev = other * (1.0 - t);
-        now + prev
-    }
 }
 
 pub trait Vector2 {
@@ -273,20 +245,8 @@ pub trait MinMax {
     fn max(self, other: Self) -> Self;
 }
 
-seq_literal!(N in (32, 64) {
-    impl MinMax for f~N {
-        fn min(self, other: Self) -> Self {
-            self.min(other)
-        }
-
-        fn max(self, other: Self) -> Self {
-            self.max(other)
-        }
-    }
-});
-
-seq_literal_2!(M in ("i", "u") and N in (8, 16, 32, 64, 128) {
-    impl MinMax for [<M N>] {
+seq_ints!(N {
+    impl MinMax for [< N >] {
         fn min(self, other: Self) -> Self {
             Ord::min(self, other)
         }
@@ -297,30 +257,31 @@ seq_literal_2!(M in ("i", "u") and N in (8, 16, 32, 64, 128) {
     }
 });
 
+seq_floats!(N {
+    impl MinMax for [< N >] {
+        fn min(self, other: Self) -> Self {
+            self.min(other)
+        }
+
+        fn max(self, other: Self) -> Self {
+            self.max(other)
+        }
+    }
+});
+
 pub trait InRange {
     type T;
 
     fn in_range(&self, range: impl RangeBounds<Self::T>) -> bool;
 }
 
-macro_rules! impl_range {
-    ($ty:ty) => {
-        impl InRange for $ty {
-            type T = Self;
+seq_num_types!(N {
+    impl InRange for [< N >] {
+        type T = Self;
 
-            #[inline]
-            fn in_range(&self, range: impl RangeBounds<<Self as InRange>::T>) -> bool {
-                range.contains(&self)
-            }
+        #[inline(always)]
+        fn in_range(&self, range: impl RangeBounds<<Self as InRange>::T>) -> bool {
+            range.contains(&self)
         }
-    };
-}
-
-seq_literal!(N in (8, 16, 32, 64, 128) {
-    impl_range!(u~N);
-    impl_range!(i~N);
+    }
 });
-impl_range!(f32);
-impl_range!(f64);
-impl_range!(usize);
-impl_range!(isize);

@@ -129,7 +129,7 @@ impl ApplicationHandler for Game {
                         let meshes = data.level.get_chunks_mut().flat_map(|(pos, c)| c.get_sections_mut().iter_mut().flat_map(|s| s.remesh(*pos, min_y_section, data.resource_manager.get_model_manager()))).collect::<Vec<_>>();
                         engine.update_section_meshes(meshes);
                         data.camera.adjust(Vec2U32::from(engine.get_window().inner_size()).map::<_, Vec2F32>(|x| x as f32), partial_tick);
-                        engine.update_fps(data.camera.get_pos());
+                        engine.update_fps(data.camera.get_pos(partial_tick));
                         engine.resize_or_update_swapchain();
                         engine.render_game(&data.level, &data.camera);
                     });

@@ -1,15 +1,14 @@
 ﻿use crate::math::angle::Angle;
+use crate::math::lerp::Lerp;
 use crate::math::vec3f::Vec3F32;
 use crate::math::vec3f::Vec3F64;
-use crate::math::Lerp;
-use crate::{impl_bin_op, impl_bin_op_transform};
+use crate::{impl_bin_op, impl_bin_op_transform, seq_literal};
 use glam::DQuat as Q64;
 use glam::Quat as Q32;
 use std::ops::Mul;
 use std::ops::MulAssign;
-use super_seq_macro::seq;
 
-seq!(N in (5..=6).collect().map(|i| 1 << i) {
+seq_literal!(N in (32, 64) {
     #[derive(Copy, Clone, Debug)]
     pub struct Quat~N(pub(super) Q~N);
 
@@ -28,7 +27,7 @@ seq!(N in (5..=6).collect().map(|i| 1 << i) {
     impl Lerp for Quat~N {
 
         #[inline(always)]
-        fn lerp(&self, other: Self, t: f32) -> Self {
+        fn lerp(self, other: Self, t: f32) -> Self {
             #[allow(clippy::unnecessary_cast)]
             Self(other.0.lerp(self.0, t as f~N))
         }

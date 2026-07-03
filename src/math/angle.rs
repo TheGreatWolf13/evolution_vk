@@ -1,10 +1,14 @@
-﻿use crate::math::quat::Quat32;
+﻿use crate::math::lerp::Lerp;
+use crate::math::quat::Quat32;
 use crate::math::vec3f::Vec3F32;
 use crate::{impl_bin_op, impl_deref};
 use std::f32::consts::PI;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
-pub trait Angle {
+pub trait Angle: Sized + Copy {
+    const ZERO: Self;
+    const FULL: Self;
+
     fn to_degrees(self) -> AngleDeg;
 
     fn to_radians(self) -> AngleRad;
@@ -16,6 +20,19 @@ pub trait Angle {
     fn cos(self) -> f32;
 
     fn sin_cos(self) -> (f32, f32);
+
+    fn to_rot(self, dir: RotDirection) -> Rot<Self> {
+        Rot {
+            angle: self,
+            dir,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum RotDirection {
+    CW,
+    CCW,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -28,8 +45,11 @@ pub struct AngleRad(f32);
 pub struct AngleRev(f32);
 
 impl Angle for AngleDeg {
+    const ZERO: Self = Self(0.0);
+    const FULL: Self = Self(360.0);
+
     #[inline]
-    fn to_degrees(self) -> AngleDeg {
+    fn to_degrees(self) -> Self {
         self
     }
 
@@ -61,6 +81,9 @@ impl Angle for AngleDeg {
 }
 
 impl Angle for AngleRad {
+    const ZERO: AngleRad = AngleRad(0.0);
+    const FULL: Self = AngleRad(2.0 * PI);
+
     #[inline]
     fn to_degrees(self) -> AngleDeg {
         AngleDeg(self.0.to_degrees())
@@ -93,6 +116,9 @@ impl Angle for AngleRad {
 }
 
 impl Angle for AngleRev {
+    const ZERO: AngleRev = AngleRev(0.0);
+    const FULL: Self = AngleRev(1.0);
+
     #[inline]
     fn to_degrees(self) -> AngleDeg {
         AngleDeg(self.0 * 360.0)
@@ -126,8 +152,6 @@ impl Angle for AngleRev {
 }
 
 impl AngleDeg {
-    pub const ZERO: AngleDeg = Self::new(0.0);
-
     #[inline]
     pub const fn new(deg: f32) -> Self {
         Self(deg)
@@ -135,8 +159,6 @@ impl AngleDeg {
 }
 
 impl AngleRad {
-    pub const ZERO: AngleRad = AngleRad(0.0);
-
     #[inline]
     pub fn new(radians: f32) -> Self {
         Self(radians)
@@ -144,60 +166,102 @@ impl AngleRad {
 }
 
 impl AngleRev {
-    pub const ZERO: AngleRev = Self::new(0.0);
-
     #[inline]
     pub const fn new(revolutions: f32) -> Self {
         Self(revolutions)
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Rot<T: Angle + Copy> {
+    angle: T,
+    dir: RotDirection,
+}
+
+impl<T: Angle + Copy> Rot<T> {
+    pub const fn get_angle(&self) -> T {
+        self.angle
+    }
+
+    pub const fn get_direction(&self) -> RotDirection {
+        self.dir
+    }
+}
+
+impl<T: Angle + Copy + Sub<Output = T> + Mul<f32, Output = T> + Add<Output = T>> Lerp for Rot<T> {
+    fn lerp(self, other: Self, t: f32) -> Self {
+        //Self is now
+        let delta;
+        match self.dir {
+            RotDirection::CW => delta = other.angle - self.angle,
+            RotDirection::CCW => delta = self.angle - other.angle,
+        }
+        let angle = other.angle + delta * t;
+        Self {
+            angle,
+            dir: self.dir,
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Rot3Deg(AngleDeg, AngleDeg, AngleDeg);
+pub struct Rot3<T: Angle + Copy>(Rot<T>, Rot<T>, Rot<T>);
 
-impl Rot3Deg {
-    pub const ZERO: Rot3Deg = Self::new(AngleDeg::ZERO, AngleDeg::ZERO, AngleDeg::ZERO);
-
+impl<T: Angle + Copy> Rot3<T> {
     #[inline]
-    pub const fn new(x: AngleDeg, y: AngleDeg, z: AngleDeg) -> Self {
-        Self(x, y, z)
+    pub fn zero() -> Self {
+        Self(T::ZERO.to_rot(RotDirection::CCW), T::ZERO.to_rot(RotDirection::CCW), T::ZERO.to_rot(RotDirection::CCW))
     }
 
     #[inline]
-    pub const fn x(&self) -> AngleDeg {
+    pub fn new(x: T, y: T, z: T) -> Self {
+        Self(x.to_rot(RotDirection::CCW), y.to_rot(RotDirection::CCW), z.to_rot(RotDirection::CCW))
+    }
+
+    #[inline]
+    pub const fn x(&self) -> Rot<T> {
         self.0
     }
 
     #[inline]
-    pub const fn y(&self) -> AngleDeg {
+    pub const fn y(&self) -> Rot<T> {
         self.1
     }
 
     #[inline]
-    pub const fn z(&self) -> AngleDeg {
+    pub const fn z(&self) -> Rot<T> {
         self.2
     }
 
     #[inline]
-    pub const fn x_mut(&mut self) -> &mut AngleDeg {
+    pub const fn x_mut(&mut self) -> &mut Rot<T> {
         &mut self.0
     }
 
     #[inline]
-    pub const fn y_mut(&mut self) -> &mut AngleDeg {
+    pub const fn y_mut(&mut self) -> &mut Rot<T> {
         &mut self.1
     }
 
     #[inline]
-    pub const fn z_mut(&mut self) -> &mut AngleDeg {
+    pub const fn z_mut(&mut self) -> &mut Rot<T> {
         &mut self.2
     }
 
     pub fn to_quat(&self) -> Quat32 {
-        let mut quat = Quat32::from_axis_angle(Vec3F32::Z, self.z());
-        quat *= Quat32::from_axis_angle(Vec3F32::Y, self.y());
-        quat *= Quat32::from_axis_angle(Vec3F32::X, self.x());
+        let mut quat = Quat32::from_axis_angle(Vec3F32::Z, self.z().get_angle());
+        quat *= Quat32::from_axis_angle(Vec3F32::Y, self.y().get_angle());
+        quat *= Quat32::from_axis_angle(Vec3F32::X, self.x().get_angle());
         quat
+    }
+}
+
+impl<T: Angle + Copy + Add<Output = T> + Sub<Output = T> + Mul<f32, Output = T>> Lerp for Rot3<T> {
+    fn lerp(self, other: Self, t: f32) -> Self {
+        let x = self.0.lerp(other.0, t);
+        let y = self.1.lerp(other.1, t);
+        let z = self.2.lerp(other.2, t);
+        Self(x, y, z)
     }
 }
 
@@ -217,19 +281,15 @@ impl_deref!(AngleRev as f32: self => &self.0);
 impl_rot!(AngleDeg + (AngleDeg, AngleRad, AngleRev): Add add, (self, rhs) => Self(self.0 + rhs.to_degrees().0));
 impl_rot!(AngleRad + (AngleDeg, AngleRad, AngleRev): Add add, (self, rhs) => Self(self.0 + rhs.to_radians().0));
 impl_rot!(AngleRev + (AngleDeg, AngleRad, AngleRev): Add add, (self, rhs) => Self(self.0 + rhs.to_revolutions().0));
-impl_bin_op!(Rot3Deg + Rot3Deg: Add add, (self, rhs) => Self(self.0 + rhs.0, self.1 + rhs.1, self.2 + rhs.2));
 //Sub
 impl_rot!(AngleDeg - (AngleDeg, AngleRad, AngleRev): Sub sub, (self, rhs) => Self(self.0 - rhs.to_degrees().0));
 impl_rot!(AngleRad - (AngleDeg, AngleRad, AngleRev): Sub sub, (self, rhs) => Self(self.0 - rhs.to_radians().0));
 impl_rot!(AngleRev - (AngleDeg, AngleRad, AngleRev): Sub sub, (self, rhs) => Self(self.0 - rhs.to_revolutions().0));
-impl_bin_op!(Rot3Deg - Rot3Deg: Sub sub, (self, rhs) => Self(self.0 - rhs.0, self.1 - rhs.1, self.2 - rhs.2));
 //Mul
 impl_bin_op!(AngleDeg * f32: Mul mul, (self, rhs) => Self(self.0 * rhs));
 impl_bin_op!(AngleRad * f32: Mul mul, (self, rhs) => Self(self.0 * rhs));
 impl_bin_op!(AngleRev * f32: Mul mul, (self, rhs) => Self(self.0 * rhs));
-impl_bin_op!(Rot3Deg * f32: Mul mul, (self, rhs) => Self(self.0 * rhs, self.1 * rhs, self.2 * rhs));
 //Div
 impl_bin_op!(AngleDeg / f32: Div div, (self, rhs) => Self(self.0 / rhs));
 impl_bin_op!(AngleRad / f32: Div div, (self, rhs) => Self(self.0 / rhs));
 impl_bin_op!(AngleRev / f32: Div div, (self, rhs) => Self(self.0 / rhs));
-impl_bin_op!(Rot3Deg / f32: Div div, (self, rhs) => Self(self.0 / rhs, self.1 / rhs, self.2 / rhs));

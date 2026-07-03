@@ -1,7 +1,8 @@
 ﻿use crate::client::texture::placer::TexturePlacer;
+use crate::math::lerp::PaP;
 use crate::math::vec2f::Vec2F32;
 use crate::math::vec2u::Vec2U32;
-use crate::math::{PaP, Vector2};
+use crate::math::Vector2;
 use image::{ExtendedColorType, ImageFormat, Rgba, RgbaImage};
 use light_ranged_integers::RangedU8;
 use log::warn;
@@ -160,13 +161,13 @@ impl TextureInfo {
     }
 
     pub fn get_mapped(&self, index: RangedU8<0, 3>, uv: (Vec2F32, Vec2F32)) -> Vec2F32 {
-        let u = PaP(self.uv0.x(), self.uv1.x());
-        let v = PaP(self.uv0.y(), self.uv1.y());
+        let u = PaP::past_and_present(self.uv0.x(), self.uv1.x());
+        let v = PaP::past_and_present(self.uv0.y(), self.uv1.y());
         match index.inner() {
-            0 => Vec2F32::new(u.lerp(uv.0.x()), v.lerp(uv.0.y())),
-            1 => Vec2F32::new(u.lerp(uv.0.x()), v.lerp(uv.1.y())),
-            2 => Vec2F32::new(u.lerp(uv.1.x()), v.lerp(uv.0.y())),
-            3 => Vec2F32::new(u.lerp(uv.1.x()), v.lerp(uv.1.y())),
+            0 => Vec2F32::new(u.get(uv.0.x()), v.get(uv.0.y())),
+            1 => Vec2F32::new(u.get(uv.0.x()), v.get(uv.1.y())),
+            2 => Vec2F32::new(u.get(uv.1.x()), v.get(uv.0.y())),
+            3 => Vec2F32::new(u.get(uv.1.x()), v.get(uv.1.y())),
             _ => unreachable!(),
         }
     }

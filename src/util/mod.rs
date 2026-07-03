@@ -81,3 +81,25 @@ macro_rules! seq_literal_2 {
         });
     };
 }
+
+#[macro_export]
+macro_rules! seq_ints {
+    ($n:ident $b:tt) => {
+        crate::seq_literal_1!($n in ("u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize") $b);
+    }
+}
+
+#[macro_export]
+macro_rules! seq_floats {
+    ($n:ident $b:tt) => {
+        crate::seq_literal_1!($n in ("f32", "f64") $b);
+    }
+}
+
+#[macro_export]
+macro_rules! seq_num_types {
+    ($n:ident $b:tt) => {
+        crate::seq_ints!($n $b);
+        crate::seq_floats!($n $b);
+    }
+}
