@@ -44,7 +44,7 @@ impl ApplicationHandler for Game {
     fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
         match cause {
             StartCause::Init => {
-                info!("Init");
+                info!("Initializing Evolution VK");
                 let resource_manager = ResourceManager::new();
                 let engine = GraphicsEngine::new(&event_loop, &resource_manager.get_texture_manager());
                 let mut level = Level::new(-4);
@@ -167,10 +167,8 @@ fn main() {
         std::env::set_var("RUST_LOG", "debug");
     }
     env_logger::builder().format_source_path(true).format_target(false).init();
-    info!("Initializing Evolution VK");
     info!("{}", Blocks::all().map(|b| b.get_name_id()).intersperse(", ").collect::<String>());
     let event_loop = EventLoop::new().unwrap();
     let mut game = Game::Uninit;
     event_loop.run_app(&mut game).unwrap();
-    info!("Back to main");
 }
