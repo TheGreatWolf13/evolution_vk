@@ -1,6 +1,5 @@
 ﻿use crate::math::vec2u::Vec2U32;
 use crate::math::Vector2;
-use log::info;
 
 pub(super) struct WindowParams {
     size: Vec2U32,
@@ -46,7 +45,6 @@ impl WindowParams {
     }
 
     pub(super) fn set_resized(&mut self) {
-        info!("Resized");
         self.should_resize = false;
     }
 

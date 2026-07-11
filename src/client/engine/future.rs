@@ -1,14 +1,18 @@
 ﻿use crate::client::engine::queue::Queue;
+use crate::client::engine::swapchain::FrameArray;
+use crate::client::engine::GraphicsEngine;
 use std::sync::Arc;
 use vulkano::command_buffer::PrimaryAutoCommandBuffer;
 use vulkano::device::Device;
 use vulkano::swapchain::SwapchainPresentInfo;
+use vulkano::sync::fence::{Fence, FenceCreateFlags, FenceCreateInfo};
 use vulkano::sync::GpuFuture;
 use vulkano::{sync, Validated, VulkanError};
 
 pub(super) struct ExecutionFuture {
     inner: Option<Box<dyn GpuFuture>>,
     last_queue: Option<Queue>,
+    fences: FrameArray<Fence, { GraphicsEngine::FRAMES_IN_FLIGHT as usize }>,
 }
 
 impl ExecutionFuture {
@@ -16,6 +20,10 @@ impl ExecutionFuture {
         Self {
             inner: Some(sync::now(device.clone()).boxed()),
             last_queue: None,
+            fences: FrameArray::new(|| Fence::new(device.clone(), FenceCreateInfo {
+                flags: FenceCreateFlags::SIGNALED,
+                ..FenceCreateInfo::default()
+            }).unwrap()),
         }
     }
 

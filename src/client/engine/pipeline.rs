@@ -2,10 +2,10 @@
 use crate::client::mesh::Mesh;
 use crate::client::vertex::VertexFormat;
 use crate::if_else;
-use log::debug;
+use log::{debug, warn};
 use std::sync::Arc;
 use tuple_map::TupleMap2;
-use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
+use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, BufferWriteGuard, Subbuffer};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{DescriptorSet, PersistentDescriptorSet, WriteDescriptorSet};
@@ -22,6 +22,7 @@ use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 use vulkano::pipeline::{DynamicState, GraphicsPipeline, Pipeline as P, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
 use vulkano::render_pass::{RenderPass, Subpass};
+use vulkano::sync::HostAccessError;
 use vulkano::{DeviceSize, ValidationError};
 
 pub(super) struct Pipeline<V: VertexFormat> {
@@ -33,15 +34,15 @@ pub(super) struct Pipeline<V: VertexFormat> {
 }
 
 pub trait PipelineConsumer {
-    fn render<'a, V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, swapchain: &SwapChain, meshes: impl IntoIterator<Item = &'a Mesh<V>>) -> Result<&mut Self, Box<ValidationError>>;
+    fn render<'a, V: VertexFormat>(&mut self, pipeline: &mut Pipeline<V>, swapchain: &SwapChain, meshes: impl IntoIterator<Item = &'a Mesh<V>>) -> Result<&mut Self, Box<ValidationError>>;
 
-    fn bind_pipeline<V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, swap_chain: &SwapChain) -> Result<&mut Self, Box<ValidationError>>;
+    fn bind_pipeline<V: VertexFormat>(&mut self, pipeline: &mut Pipeline<V>, swap_chain: &SwapChain) -> Result<&mut Self, Box<ValidationError>>;
 
     // fn push_constant<V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, pc: impl Into<V::PushConstant>) -> Result<&mut Self, Box<ValidationError>>;
 }
 
 impl PipelineConsumer for AutoCommandBufferBuilder<PrimaryAutoCommandBuffer> {
-    fn render<'a, V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, swapchain: &SwapChain, meshes: impl IntoIterator<Item = &'a Mesh<V>>) -> Result<&mut Self, Box<ValidationError>> {
+    fn render<'a, V: VertexFormat>(&mut self, pipeline: &mut Pipeline<V>, swapchain: &SwapChain, meshes: impl IntoIterator<Item = &'a Mesh<V>>) -> Result<&mut Self, Box<ValidationError>> {
         self
             .bind_pipeline_graphics(pipeline.pipeline.clone())?
             .bind_descriptor_sets(PipelineBindPoint::Graphics, pipeline.pipeline.layout().clone(), 0, pipeline.descriptor_sets.get(&swapchain).clone())?;
@@ -51,7 +52,7 @@ impl PipelineConsumer for AutoCommandBufferBuilder<PrimaryAutoCommandBuffer> {
         Ok(self)
     }
 
-    fn bind_pipeline<V: VertexFormat>(&mut self, pipeline: &Pipeline<V>, swap_chain: &SwapChain) -> Result<&mut Self, Box<ValidationError>> {
+    fn bind_pipeline<V: VertexFormat>(&mut self, pipeline: &mut Pipeline<V>, swap_chain: &SwapChain) -> Result<&mut Self, Box<ValidationError>> {
         self
             .bind_pipeline_graphics(pipeline.pipeline.clone())?
             .bind_descriptor_sets(PipelineBindPoint::Graphics, pipeline.pipeline.layout().clone(), 0, pipeline.descriptor_sets.get(&swap_chain).clone())?
@@ -109,7 +110,7 @@ impl<V: VertexFormat> Pipeline<V> {
                 },
             ).unwrap()
         };
-        let uniform_buffers = swapchain.create_framevec(|| {
+        let uniform_buffers = FrameVec::new(|| {
             Buffer::new_sized::<V::Uniform>(
                 allocator.clone(),
                 BufferCreateInfo {
@@ -122,7 +123,7 @@ impl<V: VertexFormat> Pipeline<V> {
                 },
             ).unwrap()
         });
-        let storage_buffers = swapchain.create_framevec(|| {
+        let storage_buffers = FrameVec::new(|| {
             Buffer::new_slice::<V::SSBOType>(
                 allocator.clone(),
                 BufferCreateInfo {
@@ -161,8 +162,12 @@ impl<V: VertexFormat> Pipeline<V> {
         }
     }
 
-    pub fn write_uniform(&self, uniform: impl Into<V::Uniform>, swapchain: &SwapChain) {
-        *self.uniform_buffers.get(swapchain).write().unwrap() = uniform.into();
+    pub fn write_uniform(&mut self, uniform: impl Into<V::Uniform>, swapchain: &SwapChain) {
+        let (uniform_buffer) = self.uniform_buffers.get(swapchain);
+        match uniform_buffer.write() {
+            Ok(mut guard) => *guard = uniform.into(),
+            Err(e) => warn!("Failed to write to uniform buffer! {e}"),
+        }
     }
 
     pub fn write_storate<I: Into<V::SSBOType>, It: IntoIterator<Item = I, IntoIter = impl ExactSizeIterator<Item = I>>>(&mut self, items: It, swapchain: &SwapChain) {
@@ -171,9 +176,13 @@ impl<V: VertexFormat> Pipeline<V> {
         if len as DeviceSize > self.storage_buffers.get(swapchain).len() {
             panic!("Data does not fit into storage buffer: Buffer Size = {}, Data length = {}", self.storage_buffers.get(swapchain).len(), len);
         }
-        let mut guard = self.storage_buffers.get(swapchain).write().unwrap();
-        for (i, item) in iter.enumerate() {
-            guard[i] = item.into();
+        match self.storage_buffers.get(swapchain).write() {
+            Ok(mut guard) => {
+                for (i, item) in iter.enumerate() {
+                    guard[i] = item.into();
+                }
+            }
+            Err(e) => warn!("Failed to write to storage buffer! {e}"),
         }
     }
 
@@ -181,7 +190,7 @@ impl<V: VertexFormat> Pipeline<V> {
         if len as DeviceSize > self.storage_buffers.get(swapchain).len() {
             let new_len = self.storage_buffers.get(swapchain).len().max(len as DeviceSize);
             debug!("Reallocated storage buffers from {} to {}", self.storage_buffers.get(swapchain).len(), new_len);
-            self.storage_buffers = swapchain.create_framevec(|| {
+            self.storage_buffers = FrameVec::new(|| {
                 Buffer::new_slice::<V::SSBOType>(
                     allocator.clone(),
                     BufferCreateInfo {

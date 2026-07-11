@@ -1,4 +1,6 @@
-﻿use std::sync::Arc;
+﻿use crate::client::engine::GraphicsEngine;
+use itertools::Itertools;
+use std::sync::Arc;
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::device::Device;
 use vulkano::format::Format;
@@ -6,7 +8,7 @@ use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo, StandardMemoryAllocator};
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass};
-use vulkano::swapchain::{PresentMode, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
+use vulkano::swapchain::{PresentMode, Surface, SurfaceInfo, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::{swapchain, Validated, VulkanError};
 use winit::dpi::PhysicalSize;
 
@@ -14,28 +16,62 @@ pub(super) struct SwapChain {
     swapchain: Arc<Swapchain>,
     framebuffers: FrameVec<Arc<Framebuffer>>,
     image_index: u32,
+    frame_index: u32,
     needs_recreate: bool,
 }
+
+pub(super) trait PerFrameStorage<T> {
+    fn get(&mut self, swap: &SwapChain) -> &T;
+}
+
+pub(super) struct FrameArray<T, const N: usize>([T; N]);
 
 pub(super) struct FrameVec<T>(Vec<T>);
 
 impl<T> FrameVec<T> {
-    pub fn get(&self, swap: &SwapChain) -> &T {
-        &self.0[swap.image_index as usize]
+    fn _get(&mut self, index: u32) -> &T {
+        &self.0[index as usize]
+    }
+
+    pub fn get(&mut self, swap: &SwapChain) -> &T {
+        self._get(swap.frame_index)
     }
 
     pub fn create_new_attached<U>(&self, f: impl FnMut(&T) -> U) -> FrameVec<U> {
         FrameVec(self.0.iter().map(f).collect::<Vec<_>>())
     }
-    
-    pub fn get_data_sample<R>(&self, f: impl Fn(&T) -> R) -> R {
-        f(&self.0[0])
+
+    pub fn new(mut f: impl FnMut() -> T) -> Self {
+        let mut vec = Vec::with_capacity(GraphicsEngine::FRAMES_IN_FLIGHT as usize);
+        for _ in 0..GraphicsEngine::FRAMES_IN_FLIGHT {
+            vec.push(f());
+        }
+        FrameVec(vec)
+    }
+}
+
+impl<T> PerFrameStorage<T> for FrameVec<T> {
+    fn get(&mut self, swapchain: &SwapChain) -> &T {
+        self._get(swapchain.frame_index)
+    }
+}
+
+impl<T, const N: usize> PerFrameStorage<T> for FrameArray<T, N> {
+    fn get(&mut self, swap: &SwapChain) -> &T {
+        &self.0[swap.frame_index as usize]
+    }
+}
+
+impl<T, const N: usize> FrameArray<T, N> {
+    pub fn new(mut f: impl FnMut() -> T) -> Self {
+        let arr = (0..GraphicsEngine::FRAMES_IN_FLIGHT).map(|_| f()).next_array().unwrap();
+        FrameArray(arr)
     }
 }
 
 impl SwapChain {
     pub fn new(window_size: PhysicalSize<u32>, image_format: Format, physical_device: Arc<PhysicalDevice>, device: Arc<Device>, surface: Arc<Surface>, render_pass: Arc<RenderPass>, allocator: Arc<StandardMemoryAllocator>) -> Self {
-        let caps = physical_device.surface_capabilities(&surface, Default::default()).expect("failed to get surface capabilities");
+        let caps = physical_device.surface_capabilities(&surface, SurfaceInfo::default()).expect("failed to get surface capabilities");
         let composite_alpha = caps.supported_composite_alpha.into_iter().next().unwrap();
         let (swapchain, images) = Swapchain::new(
             device.clone(),
@@ -54,7 +90,8 @@ impl SwapChain {
         Self {
             swapchain,
             framebuffers,
-            image_index: 0,
+            image_index: u32::MAX,
+            frame_index: 0,
             needs_recreate: false,
         }
     }
@@ -68,11 +105,15 @@ impl SwapChain {
             }
             Err(e) => panic!("failed to acquire next image: {e}"),
         };
-        self.image_index = image_index;
         if suboptimal {
             self.needs_recreate = true;
         }
-        Some((acquire_future, self.framebuffers.get(self).clone(), SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index)))
+        self.frame_index += 1;
+        if self.frame_index == GraphicsEngine::FRAMES_IN_FLIGHT {
+            self.frame_index = 0;
+        }
+        self.image_index = image_index;
+        Some((acquire_future, self.framebuffers._get(self.image_index).clone(), SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index)))
     }
 
     pub fn needs_recreate(&self) -> bool {

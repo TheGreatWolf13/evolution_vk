@@ -69,6 +69,8 @@ pub struct GraphicsEngine {
 }
 
 impl GraphicsEngine {
+    pub const FRAMES_IN_FLIGHT: u32 = 2;
+
     pub fn new(event_loop: &ActiveEventLoop, texture_manager: &TextureManager) -> Self {
         let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
         let window = Arc::new(event_loop.create_window(WindowAttributes::default().with_title("Evolution VK")).unwrap());
@@ -379,13 +381,17 @@ impl GraphicsEngine {
         self.exec_future.then_execute(cb.build().unwrap(), &self.transfer_queue);
     }
 
-    pub fn resize_or_update_swapchain(&mut self) {
+    pub fn resize_or_update_swapchain(&mut self) -> bool {
         if self.window_params.should_resize() || self.swapchain.needs_recreate() {
             let new_dimensions = self.window.inner_size();
             self.viewport.offset = [0.0, new_dimensions.height as f32];
             self.viewport.extent = [new_dimensions.width as f32, -(new_dimensions.height as f32)];
             self.swapchain.recreate(new_dimensions, self.render_pass.clone(), self.memory_allocator.clone());
             self.window_params.set_resized();
+            true
+        } //
+        else {
+            false
         }
     }
 
@@ -472,7 +478,7 @@ impl GraphicsEngine {
             ).unwrap();
             self.terrain_pipeline.realloc_storage_if_needed(transforms.len(), &self.swapchain, &self.memory_allocator, &self.ds_allocator, |buffer| [WriteDescriptorSet::buffer(0, buffer.clone())]);
             cb
-                .bind_pipeline(&self.terrain_pipeline, &self.swapchain).unwrap()
+                .bind_pipeline(&mut self.terrain_pipeline, &self.swapchain).unwrap()
                 .bind_buffers(&self.section_buffers).unwrap()
                 .draw_indexed_indirect(indirect_buffer).unwrap();
         }

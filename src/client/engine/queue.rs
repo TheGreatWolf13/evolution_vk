@@ -34,8 +34,8 @@ impl Queue {
         cb.execute(self.inner.clone()).unwrap()
     }
 
-    pub(super) fn then_execute(&self, future: Box<dyn GpuFuture>, cb: Arc<PrimaryAutoCommandBuffer>) -> Box<dyn GpuFuture> {
-        future.then_execute(self.inner.clone(), cb).unwrap().boxed()
+    pub(super) fn then_execute(&self, future: Box<dyn GpuFuture>, cb: Arc<PrimaryAutoCommandBuffer>) -> Box<CommandBufferExecFuture<Box<dyn GpuFuture>>> {
+        Box::new(future.then_execute(self.inner.clone(), cb).unwrap())
     }
 
     pub(super) fn swapchain_present(&self, future: Box<dyn GpuFuture>, present_info: SwapchainPresentInfo) -> PresentFuture<Box<dyn GpuFuture>> {
