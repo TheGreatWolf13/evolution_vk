@@ -1,6 +1,5 @@
 ﻿use crate::math::direction::{Axis2, Axis3, Axis4};
 use crate::{seq_floats, seq_ints, seq_num_types};
-use std::any::Any;
 use std::ops::RangeBounds;
 
 pub mod angle;

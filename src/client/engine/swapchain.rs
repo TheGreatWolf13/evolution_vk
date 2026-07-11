@@ -21,10 +21,13 @@ pub(super) struct SwapChain {
 }
 
 pub(super) trait PerFrameStorage<T> {
+    type _Self_<U>;
     fn get(&mut self, swap: &SwapChain) -> &T;
+
+    fn create_attached<U>(&self, f: impl FnMut(&T) -> U) -> Self::_Self_<U>;
 }
 
-pub(super) struct FrameArray<T, const N: usize>([T; N]);
+pub(super) struct FrameArray<T, const N: usize = { GraphicsEngine::FRAMES_IN_FLIGHT as usize }>([T; N]);
 
 pub(super) struct FrameVec<T>(Vec<T>);
 
@@ -37,10 +40,6 @@ impl<T> FrameVec<T> {
         self._get(swap.frame_index)
     }
 
-    pub fn create_new_attached<U>(&self, f: impl FnMut(&T) -> U) -> FrameVec<U> {
-        FrameVec(self.0.iter().map(f).collect::<Vec<_>>())
-    }
-
     pub fn new(mut f: impl FnMut() -> T) -> Self {
         let mut vec = Vec::with_capacity(GraphicsEngine::FRAMES_IN_FLIGHT as usize);
         for _ in 0..GraphicsEngine::FRAMES_IN_FLIGHT {
@@ -51,14 +50,28 @@ impl<T> FrameVec<T> {
 }
 
 impl<T> PerFrameStorage<T> for FrameVec<T> {
+    type _Self_<U> = FrameVec<U>;
+
     fn get(&mut self, swapchain: &SwapChain) -> &T {
         self._get(swapchain.frame_index)
+    }
+
+    fn create_attached<U>(&self, f: impl FnMut(&T) -> U) -> FrameVec<U> {
+        let vec = self.0.iter().map(f).collect::<Vec<_>>();
+        FrameVec(vec)
     }
 }
 
 impl<T, const N: usize> PerFrameStorage<T> for FrameArray<T, N> {
+    type _Self_<U> = FrameArray<U, N>;
+
     fn get(&mut self, swap: &SwapChain) -> &T {
         &self.0[swap.frame_index as usize]
+    }
+
+    fn create_attached<U>(&self, f: impl FnMut(&T) -> U) -> FrameArray<U, N> {
+        let arr = self.0.iter().map(f).next_array().unwrap();
+        FrameArray(arr)
     }
 }
 

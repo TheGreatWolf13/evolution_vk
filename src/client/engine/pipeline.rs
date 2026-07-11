@@ -1,11 +1,11 @@
-﻿use crate::client::engine::swapchain::{FrameVec, SwapChain};
+﻿use crate::client::engine::swapchain::{FrameArray, PerFrameStorage, SwapChain};
 use crate::client::mesh::Mesh;
 use crate::client::vertex::VertexFormat;
 use crate::if_else;
 use log::{debug, warn};
 use std::sync::Arc;
 use tuple_map::TupleMap2;
-use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, BufferWriteGuard, Subbuffer};
+use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{DescriptorSet, PersistentDescriptorSet, WriteDescriptorSet};
@@ -22,15 +22,14 @@ use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 use vulkano::pipeline::{DynamicState, GraphicsPipeline, Pipeline as P, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
 use vulkano::render_pass::{RenderPass, Subpass};
-use vulkano::sync::HostAccessError;
 use vulkano::{DeviceSize, ValidationError};
 
 pub(super) struct Pipeline<V: VertexFormat> {
     pipeline: Arc<GraphicsPipeline>,
-    uniform_buffers: FrameVec<Subbuffer<V::Uniform>>,
-    storage_buffers: FrameVec<Subbuffer<[V::SSBOType]>>,
-    descriptor_sets: FrameVec<Arc<PersistentDescriptorSet>>,
-    storage_descriptor_sets: FrameVec<Arc<PersistentDescriptorSet>>,
+    uniform_buffers: FrameArray<Subbuffer<V::Uniform>>,
+    storage_buffers: FrameArray<Subbuffer<[V::SSBOType]>>,
+    descriptor_sets: FrameArray<Arc<PersistentDescriptorSet>>,
+    storage_descriptor_sets: FrameArray<Arc<PersistentDescriptorSet>>,
 }
 
 pub trait PipelineConsumer {
@@ -67,7 +66,7 @@ impl PipelineConsumer for AutoCommandBufferBuilder<PrimaryAutoCommandBuffer> {
 }
 
 impl<V: VertexFormat> Pipeline<V> {
-    pub fn new<R1: IntoIterator<Item = WriteDescriptorSet>, R2: IntoIterator<Item = WriteDescriptorSet>>(allocator: Arc<StandardMemoryAllocator>, ds_allocator: &Arc<StandardDescriptorSetAllocator>, render_pass: Arc<RenderPass>, swapchain: &SwapChain, mut uniform_binding_maker: impl FnMut(&Subbuffer<V::Uniform>) -> R1, mut storage_binding_maker: impl FnMut(&Subbuffer<[V::SSBOType]>) -> R2) -> Pipeline<V> {
+    pub fn new<R1: IntoIterator<Item = WriteDescriptorSet>, R2: IntoIterator<Item = WriteDescriptorSet>>(allocator: Arc<StandardMemoryAllocator>, ds_allocator: &Arc<StandardDescriptorSetAllocator>, render_pass: Arc<RenderPass>, mut uniform_binding_maker: impl FnMut(&Subbuffer<V::Uniform>) -> R1, mut storage_binding_maker: impl FnMut(&Subbuffer<[V::SSBOType]>) -> R2) -> Pipeline<V> {
         let device = allocator.device().clone();
         let (vs, fs) = V::load_shaders(device.clone());
         let (vs_entry, fs_entry) = (vs, fs).map(|s| s.entry_point("main").unwrap());
@@ -110,7 +109,7 @@ impl<V: VertexFormat> Pipeline<V> {
                 },
             ).unwrap()
         };
-        let uniform_buffers = FrameVec::new(|| {
+        let uniform_buffers = FrameArray::new(|| {
             Buffer::new_sized::<V::Uniform>(
                 allocator.clone(),
                 BufferCreateInfo {
@@ -123,7 +122,7 @@ impl<V: VertexFormat> Pipeline<V> {
                 },
             ).unwrap()
         });
-        let storage_buffers = FrameVec::new(|| {
+        let storage_buffers = FrameArray::new(|| {
             Buffer::new_slice::<V::SSBOType>(
                 allocator.clone(),
                 BufferCreateInfo {
@@ -137,7 +136,7 @@ impl<V: VertexFormat> Pipeline<V> {
                 16,
             ).unwrap()
         });
-        let descriptor_sets = uniform_buffers.create_new_attached(|buffer| {
+        let descriptor_sets = uniform_buffers.create_attached(|buffer| {
             PersistentDescriptorSet::new(
                 ds_allocator,
                 pipeline.layout().set_layouts()[0].clone(),
@@ -145,7 +144,7 @@ impl<V: VertexFormat> Pipeline<V> {
                 [],
             ).unwrap()
         });
-        let storage_descriptor_sets = storage_buffers.create_new_attached(|buffer| {
+        let storage_descriptor_sets = storage_buffers.create_attached(|buffer| {
             PersistentDescriptorSet::new(
                 ds_allocator,
                 pipeline.layout().set_layouts()[1].clone(),
@@ -190,7 +189,7 @@ impl<V: VertexFormat> Pipeline<V> {
         if len as DeviceSize > self.storage_buffers.get(swapchain).len() {
             let new_len = self.storage_buffers.get(swapchain).len().max(len as DeviceSize);
             debug!("Reallocated storage buffers from {} to {}", self.storage_buffers.get(swapchain).len(), new_len);
-            self.storage_buffers = FrameVec::new(|| {
+            self.storage_buffers = FrameArray::new(|| {
                 Buffer::new_slice::<V::SSBOType>(
                     allocator.clone(),
                     BufferCreateInfo {
@@ -204,7 +203,7 @@ impl<V: VertexFormat> Pipeline<V> {
                     new_len,
                 ).unwrap()
             });
-            self.storage_descriptor_sets = self.storage_buffers.create_new_attached(|buffer| {
+            self.storage_descriptor_sets = self.storage_buffers.create_attached(|buffer| {
                 PersistentDescriptorSet::new(
                     ds_allocator,
                     self.storage_descriptor_sets.get(swapchain).layout().clone(),

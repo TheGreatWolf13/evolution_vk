@@ -215,7 +215,6 @@ impl GraphicsEngine {
                 memory_allocator.clone(),
                 &ds_allocator,
                 render_pass.clone(),
-                &swapchain,
                 |buffer| {
                     [
                         WriteDescriptorSet::buffer(0, buffer.clone()),

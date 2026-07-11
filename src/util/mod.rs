@@ -1,12 +1,9 @@
-﻿use crate::util::error::Throwable;
-use std::any::type_name;
+﻿use std::any::type_name;
 
 pub mod error;
 pub mod lazy_init;
 pub mod random;
 pub mod timer;
-
-pub type Result<T = ()> = core::result::Result<T, Throwable>;
 
 pub struct Utils;
 

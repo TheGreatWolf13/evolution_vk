@@ -6,7 +6,7 @@ use crate::if_else;
 use crate::math::angle::{AngleDeg, Rot3};
 use crate::math::lerp::LerpMode;
 use crate::math::vec3f::Vec3F32;
-use crate::math::{Vector2, Vector3};
+use crate::math::Vector3;
 use enum_map::{enum_map, EnumMap};
 use winit::event::{ElementState, KeyEvent, MouseButton};
 use winit::keyboard::KeyCode;
