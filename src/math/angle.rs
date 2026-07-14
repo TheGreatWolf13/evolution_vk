@@ -1,11 +1,11 @@
 ﻿use crate::math::lerp::Lerp;
 use crate::math::quat::Quat32;
 use crate::math::vec3f::Vec3F32;
-use crate::{impl_bin_op, impl_deref};
+use crate::{impl_bin_op, impl_deref, seq_literal_1};
 use std::f32::consts::PI;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
-pub trait Angle: Sized + Copy {
+pub trait Angle: Sized + Copy + PartialOrd + PartialEq {
     const ZERO: Self;
     const FULL: Self;
 
@@ -35,13 +35,13 @@ pub enum RotDirection {
     CCW,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub struct AngleDeg(f32);
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub struct AngleRad(f32);
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub struct AngleRev(f32);
 
 impl Angle for AngleDeg {
@@ -281,6 +281,37 @@ impl_deref!(AngleRev as f32: self => &self.0);
 impl_rot!(AngleDeg + (AngleDeg, AngleRad, AngleRev): Add add, (self, rhs) => Self(self.0 + rhs.to_degrees().0));
 impl_rot!(AngleRad + (AngleDeg, AngleRad, AngleRev): Add add, (self, rhs) => Self(self.0 + rhs.to_radians().0));
 impl_rot!(AngleRev + (AngleDeg, AngleRad, AngleRev): Add add, (self, rhs) => Self(self.0 + rhs.to_revolutions().0));
+seq_literal_1!(N in ("AngleDeg", "AngleRad", "AngleRev") {
+    impl Add<[< N >]> for Rot<[< N >]> {
+        type Output = Self;
+        
+        fn add(self, rhs: [< N >]) -> Self::Output {
+            let angle = self.angle + rhs;
+            let dir = if rhs >= [< N >]::ZERO {
+                RotDirection::CCW
+            } //
+            else {
+                RotDirection::CW
+            };
+            Self {
+                angle,
+                dir,
+            }
+        }
+    }
+    
+    impl AddAssign<[< N >]> for Rot<[< N >]> {
+        fn add_assign(&mut self, rhs: [< N >]) {
+            self.angle += rhs;
+            self.dir = if rhs >= [< N >]::ZERO {
+                RotDirection::CCW
+            } //
+            else {
+                RotDirection::CW
+            };
+        }
+    }
+});
 //Sub
 impl_rot!(AngleDeg - (AngleDeg, AngleRad, AngleRev): Sub sub, (self, rhs) => Self(self.0 - rhs.to_degrees().0));
 impl_rot!(AngleRad - (AngleDeg, AngleRad, AngleRev): Sub sub, (self, rhs) => Self(self.0 - rhs.to_radians().0));

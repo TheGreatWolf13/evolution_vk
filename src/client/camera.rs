@@ -1,4 +1,4 @@
-﻿use crate::math::angle::{AngleDeg, Rot3};
+﻿use crate::math::angle::{Angle, AngleDeg, Rot3};
 use crate::math::lerp::{LerpMode, PaP};
 use crate::math::mat4::Mat4F32;
 use crate::math::vec2f::Vec2F32;
@@ -38,6 +38,14 @@ impl Camera {
     pub fn r#move(&mut self, delta: impl Into<Vec3F32>) {
         let quat = self.rot.get_present().to_quat();
         self.pos.update(self.pos.get_present() + quat * delta.into(), LerpMode::Interpolate);
+    }
+
+    pub fn rotate<A: Angle>(&mut self, angle_deltas: (A, A, A)) {
+        let mut rot = self.rot.get_present();
+        *rot.x_mut() += angle_deltas.0.to_degrees();
+        *rot.y_mut() += angle_deltas.1.to_degrees();
+        *rot.z_mut() += angle_deltas.2.to_degrees();
+        self.rotate_to(rot, LerpMode::Interpolate);
     }
 
     pub fn rotate_to(&mut self, rot: Rot3<AngleDeg>, lerp_mode: LerpMode) {

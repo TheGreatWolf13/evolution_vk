@@ -3,8 +3,7 @@
 use crate::client::camera::Camera;
 use crate::client::input::keybinding::{BindingType, Keybinding};
 use crate::if_else;
-use crate::math::angle::{AngleDeg, Rot3};
-use crate::math::lerp::LerpMode;
+use crate::math::angle::AngleDeg;
 use crate::math::vec3f::Vec3F32;
 use crate::math::Vector3;
 use enum_map::{enum_map, EnumMap};
@@ -53,7 +52,7 @@ impl Input {
         move_z *= SPEED;
         camera.r#move((move_x, move_y, move_z));
         self.rot *= SENSITIVITY;
-        camera.rotate_to(Rot3::new(AngleDeg::new(self.rot.x()), AngleDeg::new(self.rot.y()), AngleDeg::new(self.rot.z())), LerpMode::Interpolate);
+        camera.rotate((AngleDeg::new(self.rot.x()), AngleDeg::new(self.rot.y()), AngleDeg::new(self.rot.z())));
         self.rot = Vec3F32::ZERO;
         while self.bindings[BindingType::ToggleGrabMouse].consume_click() {
             handler.toggle_grab_mouse();
