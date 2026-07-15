@@ -36,7 +36,7 @@ struct GameData {
     input: Input,
     camera: Camera,
     timer: Timer,
-    level: Level<12>,
+    level: Level,
     resource_manager: ResourceManager,
 }
 
@@ -47,7 +47,7 @@ impl ApplicationHandler for Game {
                 info!("Initializing Evolution VK");
                 let resource_manager = ResourceManager::new();
                 let engine = GraphicsEngine::new(&event_loop, &resource_manager.get_texture_manager());
-                let mut level = Level::new(-4);
+                let mut level = Level::new(12, -4);
                 level.generate_terrain();
                 *self = Game::Init(GameData {
                     graphics: engine,

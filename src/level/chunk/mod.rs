@@ -11,13 +11,12 @@ use crate::math::mat4::Mat4F32;
 use crate::math::section_pos::SectionPos;
 use crate::Block;
 use enum_iterator::all;
-use itertools::Itertools;
 
 mod palette;
 
-pub struct Chunk<const Y: usize> {
+pub struct Chunk {
     pos: ChunkPos,
-    sections: [Section; Y],
+    sections: Vec<Section>,
 }
 
 pub struct Section {
@@ -76,11 +75,11 @@ impl Section {
     }
 }
 
-impl<const Y: usize> Chunk<Y> {
-    pub fn new(pos: ChunkPos) -> Self {
+impl Chunk {
+    pub fn new(pos: ChunkPos, sections: usize) -> Self {
         Self {
             pos,
-            sections: (0..Y).map(|i| {
+            sections: (0..sections).map(|i| {
                 Section {
                     index: i as u8,
                     blocks: BlockPallet::from_single(match i {
@@ -92,7 +91,7 @@ impl<const Y: usize> Chunk<Y> {
                     mesh_region: None,
                     dirty: true,
                 }
-            }).next_array().unwrap(),
+            }).collect(),
         }
     }
 
@@ -100,11 +99,11 @@ impl<const Y: usize> Chunk<Y> {
         self.pos
     }
 
-    pub fn get_sections(&self) -> &[Section; Y] {
+    pub fn get_sections(&self) -> &[Section] {
         &self.sections
     }
 
-    pub fn get_sections_mut(&mut self) -> &mut [Section; Y] {
+    pub fn get_sections_mut(&mut self) -> &mut [Section] {
         &mut self.sections
     }
 }

@@ -5,16 +5,18 @@ use std::collections::HashMap;
 
 pub mod chunk;
 
-pub struct Level<const Y: usize> {
-    chunks: HashMap<ChunkPos, Chunk<Y>>,
+pub struct Level {
+    chunks: HashMap<ChunkPos, Chunk>,
     min_y_section: i8,
+    num_sections: usize,
 }
 
-impl<const Y: usize> Level<Y> {
-    pub fn new(min_y_section: i8) -> Self {
+impl Level {
+    pub fn new(num_sections: usize, min_y_section: i8) -> Self {
         Self {
             chunks: HashMap::new(),
             min_y_section,
+            num_sections,
         }
     }
 
@@ -22,17 +24,17 @@ impl<const Y: usize> Level<Y> {
         for x in -8..8 {
             for z in -8..8 {
                 let pos = ChunkPos::new(x, z);
-                let chunk = Chunk::<Y>::new(pos);
+                let chunk = Chunk::new(pos, self.num_sections);
                 self.chunks.insert(pos, chunk);
             }
         }
     }
 
-    pub fn get_chunks(&self) -> Iter<'_, ChunkPos, Chunk<{ Y }>> {
+    pub fn get_chunks(&self) -> Iter<'_, ChunkPos, Chunk> {
         self.chunks.iter()
     }
 
-    pub fn get_chunks_mut(&mut self) -> IterMut<'_, ChunkPos, Chunk<{ Y }>> {
+    pub fn get_chunks_mut(&mut self) -> IterMut<'_, ChunkPos, Chunk> {
         self.chunks.iter_mut()
     }
 

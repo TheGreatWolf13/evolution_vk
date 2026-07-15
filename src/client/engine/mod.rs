@@ -394,7 +394,7 @@ impl GraphicsEngine {
         }
     }
 
-    pub fn render_game<const Y: usize>(&mut self, level: &Level<Y>, camera: &Camera) {
+    pub fn render_game(&mut self, level: &Level, camera: &Camera) {
         if self.window_params.is_window_minimized() {
             return;
         }
@@ -442,7 +442,7 @@ impl GraphicsEngine {
         }
     }
 
-    fn render_level<const Y: usize>(&mut self, cb: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>, level: &Level<Y>) -> Vec<Mat4F32> {
+    fn render_level(&mut self, cb: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>, level: &Level) -> Vec<Mat4F32> {
         let min_y_section = level.get_min_y_section();
         let mut transforms = vec![];
         let mut draw_commands = vec![];
